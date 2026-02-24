@@ -66,7 +66,7 @@
 
 12. Install the machine learning library with conda:
     ```bash
-    conda install -y pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+    conda install -y pytorch torchvision torchaudio pytorch-cuda=12.4 "mkl<2025.0.0" -c pytorch -c nvidia
     ```
 
 ## Git Setup
@@ -133,6 +133,12 @@ scancel [job_id]
 ```
 
 To access the Jupyter Notebook, check the error output file (e.g., `id.err`):
+
+```bash
+cat [outputfile]
+```
+
+or
 
 ```bash
 tail -f [outputfile]
