@@ -64,6 +64,11 @@
 
 11. Confirm installation by typing `y` when prompted.
 
+12. Install the machine learning library with conda:
+    ```bash
+    conda install -y pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+    ```
+
 ## Git Setup
 
 1. Fork this repository
