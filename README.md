@@ -145,3 +145,24 @@ tail -f [outputfile]
 ```
 
 For more details on SLURM scheduling, see [ETH SLURM Guide](https://computing.ee.ethz.ch/Services/SLURM).
+
+### Exercise Submssion Workflow
+
+1. Update your fork on GitLab using the **"Update fork"** button.
+
+2. Pull the latest changes:
+   git pull origin main
+
+3. Complete the notebook `NN/exercise.ipynb`
+   <!-- Run all cells before committing. Do NOT clear outputs. -->
+
+4. Stage your changes:
+   git add NN/exercise.ipynb
+
+5. Commit:
+   git commit -m "Submission for NN"
+
+6. Push to your fork:
+   git push origin main
+
+7. Send us an email with the link to your repo and which exercise you solved. 
