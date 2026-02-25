@@ -64,7 +64,12 @@
 
 11. Confirm installation by typing `y` when prompted.
 
-12. Install the machine learning library with conda:
+12. In order to install now any packages within your environment, we have to make it active: 
+    ```bash
+    conda activate my_env
+    ```
+
+13. Install the machine learning library with conda:
     ```bash
     conda install -y pytorch torchvision torchaudio pytorch-cuda=12.4 "mkl<2025.0.0" -c pytorch -c nvidia
     ```
