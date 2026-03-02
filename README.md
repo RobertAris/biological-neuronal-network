@@ -158,7 +158,7 @@ For more details on SLURM scheduling, see [ETH SLURM Guide](https://computing.ee
 2. Pull the latest changes:
 
    ~~~bash
-   git pull origin main
+   git pull origin master
    ~~~
 
 3. Complete the notebook `NN/exercise.ipynb`  
@@ -179,7 +179,7 @@ For more details on SLURM scheduling, see [ETH SLURM Guide](https://computing.ee
 6. Push to your fork:
 
    ~~~bash
-   git push origin main
+   git push origin master
    ~~~
 
 7. Send us an email with the link to your repo and which exercise you solved.
