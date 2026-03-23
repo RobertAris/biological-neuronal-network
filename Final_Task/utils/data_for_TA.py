@@ -15,13 +15,13 @@ We provide them with utility functions for loading and saving.
 1. data_sets
 In data_sets you can put any data that is readable by the students, but not writable. 
 This means, students cannot accidentally delete any data in this directory. Do this with:
-chmod -R -c 0640
+chmod -R -c 0750
 for the directory. 
 Currently it is built such that each group has one folder and there is an additional shared folder. 
 
 2. saves
 Here you collect results, saves from students. Here you have to give also writing access:
-chmod -R -c 0660
+chmod -R -c 0770
 Currently it is built such that each group has one folder in saves, and one in saves/shared/
 
 3. groups.txt
