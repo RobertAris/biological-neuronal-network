@@ -102,9 +102,15 @@ WEIGHT_DECAY = 1e-4
 GRAD_CLIP = 1.0
 NUM_WORKERS = 0
 
-# Auxiliary losses kept fixed from the best C4/current-bit runs.
+# Base BCE remains the anchor, but Task 2 is evaluated distributionally: firing
+# rate, response timing, and response shape matter more than exact trial spikes.
 AUX_COUNT_WEIGHT = 0.03
 AUX_PSTH_WEIGHT = 0.03
+AUX_TEMPORAL_KL_WEIGHT = 0.06
+AUX_SPATIAL_KL_WEIGHT = 0.04
+AUX_EARLY_TEMPORAL_KL_WEIGHT = 0.08
+AUX_FIRST_TIME_WEIGHT = 0.02
+EARLY_TIME_WINDOW = (0, 20)
 
 # Best history configuration from the completed grid search.
 Z_HISTORY_LEN = 24
@@ -158,6 +164,11 @@ BASE_MODEL_CONFIG = dict(
     deploy_context_mode="z_window_frequency_context",
     aux_count_weight=AUX_COUNT_WEIGHT,
     aux_psth_weight=AUX_PSTH_WEIGHT,
+    aux_temporal_kl_weight=AUX_TEMPORAL_KL_WEIGHT,
+    aux_spatial_kl_weight=AUX_SPATIAL_KL_WEIGHT,
+    aux_early_temporal_kl_weight=AUX_EARLY_TEMPORAL_KL_WEIGHT,
+    aux_first_time_weight=AUX_FIRST_TIME_WEIGHT,
+    early_time_window=EARLY_TIME_WINDOW,
     weight_decay=WEIGHT_DECAY,
     context_dim=None,
 )
@@ -1231,17 +1242,85 @@ def model_forward(model, batch_dev):
     )
 
 
-def compute_loss(logits, x, count_weight=AUX_COUNT_WEIGHT, psth_weight=AUX_PSTH_WEIGHT):
+def _masked_distribution_kl(pred_mass, true_mass, eps=1e-8):
+    """Mean KL(true || pred) over rows with at least one true event."""
+    true_sum = true_mass.sum(dim=-1, keepdim=True)
+    mask = true_sum.squeeze(-1) > 0
+    if not torch.any(mask):
+        return pred_mass.new_tensor(0.0)
+    pred_sum = pred_mass.sum(dim=-1, keepdim=True)
+    true_dist = true_mass[mask] / (true_sum[mask] + eps)
+    pred_dist = (pred_mass[mask] + eps) / (pred_sum[mask] + eps * pred_mass.shape[-1])
+    kl = true_dist * ((true_dist + eps).log() - pred_dist.log())
+    return kl.sum(dim=-1).mean() / math.log(max(2, pred_mass.shape[-1]))
+
+
+def _first_time_loss(pred_time_mass, true_time_mass, eps=1e-8):
+    active = true_time_mass.sum(dim=-1) > 0
+    if not torch.any(active):
+        return pred_time_mass.new_tensor(0.0)
+    true_has_spike = true_time_mass[active] > 0
+    true_first = true_has_spike.float().argmax(dim=-1).float()
+    pred = pred_time_mass[active]
+    pred_dist = (pred + eps) / (pred.sum(dim=-1, keepdim=True) + eps * pred.shape[-1])
+    t = torch.arange(pred.shape[-1], device=pred.device, dtype=pred.dtype)
+    pred_expected = (pred_dist * t[None, :]).sum(dim=-1)
+    return F.smooth_l1_loss(pred_expected / max(1, T - 1), true_first / max(1, T - 1))
+
+
+def compute_loss(
+    logits,
+    x,
+    count_weight=AUX_COUNT_WEIGHT,
+    psth_weight=AUX_PSTH_WEIGHT,
+    temporal_kl_weight=AUX_TEMPORAL_KL_WEIGHT,
+    spatial_kl_weight=AUX_SPATIAL_KL_WEIGHT,
+    early_temporal_kl_weight=AUX_EARLY_TEMPORAL_KL_WEIGHT,
+    first_time_weight=AUX_FIRST_TIME_WEIGHT,
+    early_time_window=EARLY_TIME_WINDOW,
+):
     bce = torch_bce_from_logits(logits, x)
     pred_prob = torch.sigmoid(logits)
+
     pred_count = pred_prob.sum(dim=(1, 2)) / (N * T)
     true_count = x.sum(dim=(1, 2)) / (N * T)
     count_loss = F.mse_loss(pred_count, true_count)
+
     pred_psth = pred_prob.mean(dim=1)
     true_psth = x.mean(dim=1)
     psth_loss = F.mse_loss(pred_psth, true_psth)
-    total = bce + float(count_weight) * count_loss + float(psth_weight) * psth_loss
-    return total, {"bce": bce.detach(), "count_loss": count_loss.detach(), "psth_loss": psth_loss.detach()}
+
+    pred_time_mass = pred_prob.sum(dim=1)
+    true_time_mass = x.sum(dim=1)
+    temporal_kl_loss = _masked_distribution_kl(pred_time_mass, true_time_mass)
+
+    pred_spatial_mass = pred_prob.sum(dim=2)
+    true_spatial_mass = x.sum(dim=2)
+    spatial_kl_loss = _masked_distribution_kl(pred_spatial_mass, true_spatial_mass)
+
+    a, b = tuple(early_time_window)
+    a = max(0, int(a)); b = min(T, int(b))
+    early_temporal_kl_loss = _masked_distribution_kl(pred_time_mass[:, a:b], true_time_mass[:, a:b]) if b > a else pred_prob.new_tensor(0.0)
+    first_time_loss = _first_time_loss(pred_time_mass, true_time_mass)
+
+    total = (
+        bce
+        + float(count_weight) * count_loss
+        + float(psth_weight) * psth_loss
+        + float(temporal_kl_weight) * temporal_kl_loss
+        + float(spatial_kl_weight) * spatial_kl_loss
+        + float(early_temporal_kl_weight) * early_temporal_kl_loss
+        + float(first_time_weight) * first_time_loss
+    )
+    return total, {
+        "bce": bce.detach(),
+        "count_loss": count_loss.detach(),
+        "psth_loss": psth_loss.detach(),
+        "temporal_kl_loss": temporal_kl_loss.detach(),
+        "spatial_kl_loss": spatial_kl_loss.detach(),
+        "early_temporal_kl_loss": early_temporal_kl_loss.detach(),
+        "first_time_loss": first_time_loss.detach(),
+    }
 
 
 def unwrap_model(model):
@@ -1257,10 +1336,23 @@ def parameter_count(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def evaluate_loader(model, loader, device, store_predictions=False, count_weight=AUX_COUNT_WEIGHT, psth_weight=AUX_PSTH_WEIGHT):
+def evaluate_loader(
+    model,
+    loader,
+    device,
+    store_predictions=False,
+    count_weight=AUX_COUNT_WEIGHT,
+    psth_weight=AUX_PSTH_WEIGHT,
+    temporal_kl_weight=AUX_TEMPORAL_KL_WEIGHT,
+    spatial_kl_weight=AUX_SPATIAL_KL_WEIGHT,
+    early_temporal_kl_weight=AUX_EARLY_TEMPORAL_KL_WEIGHT,
+    first_time_weight=AUX_FIRST_TIME_WEIGHT,
+    early_time_window=EARLY_TIME_WINDOW,
+):
     model.eval()
     total_loss = 0.0
     total_bce = 0.0
+    part_sums = defaultdict(float)
     total_count = 0
     preds = []
     trues = []
@@ -1269,16 +1361,30 @@ def evaluate_loader(model, loader, device, store_predictions=False, count_weight
         for batch_raw in loader:
             batch_dev = move_batch(batch_raw, device)
             logits = model_forward(model, batch_dev)
-            loss, parts = compute_loss(logits, batch_dev["x"], count_weight=count_weight, psth_weight=psth_weight)
+            loss, parts = compute_loss(
+                logits,
+                batch_dev["x"],
+                count_weight=count_weight,
+                psth_weight=psth_weight,
+                temporal_kl_weight=temporal_kl_weight,
+                spatial_kl_weight=spatial_kl_weight,
+                early_temporal_kl_weight=early_temporal_kl_weight,
+                first_time_weight=first_time_weight,
+                early_time_window=early_time_window,
+            )
             bs = batch_dev["x"].shape[0]
             total_loss += float(loss.item()) * bs
             total_bce += float(parts["bce"].item()) * bs
+            for pk, pv in parts.items():
+                part_sums[pk] += float(pv.item()) * bs
             total_count += bs
             if store_predictions:
                 preds.append(torch.sigmoid(logits).detach().cpu().numpy().astype(np.float32))
                 trues.append(batch_dev["x"].detach().cpu().numpy().astype(np.float32))
                 trial_ids.append(batch_dev["trial_index"].detach().cpu().numpy())
     out = {"loss": total_loss / max(1, total_count), "bce": total_bce / max(1, total_count), "n": int(total_count)}
+    for pk, pv in part_sums.items():
+        out[pk] = pv / max(1, total_count)
     if store_predictions:
         out["pred_prob"] = np.concatenate(preds, axis=0) if preds else np.zeros((0, N, T), dtype=np.float32)
         out["true"] = np.concatenate(trues, axis=0) if trues else np.zeros((0, N, T), dtype=np.float32)
@@ -1343,6 +1449,107 @@ def compute_per_axis_bce(y_true, pred_prob, global_prob, pattern_prob):
     per_electrode["improvement_vs_pattern"] = (per_electrode["pattern_bce"] - per_electrode["model_bce"]) / per_electrode["pattern_bce"]
     return per_time, per_electrode
 
+
+
+
+def _distribution_kl_np(true_mass, pred_mass, eps=1e-8):
+    true_mass = np.asarray(true_mass, dtype=np.float64)
+    pred_mass = np.asarray(pred_mass, dtype=np.float64)
+    true_sum = true_mass.sum(axis=-1, keepdims=True)
+    mask = true_sum.squeeze(-1) > 0
+    if not np.any(mask):
+        return np.nan
+    pred_sum = pred_mass.sum(axis=-1, keepdims=True)
+    true_dist = true_mass[mask] / (true_sum[mask] + eps)
+    pred_dist = (pred_mass[mask] + eps) / (pred_sum[mask] + eps * pred_mass.shape[-1])
+    kl = true_dist * (np.log(true_dist + eps) - np.log(pred_dist))
+    return float(kl.sum(axis=-1).mean() / math.log(max(2, pred_mass.shape[-1])))
+
+
+def _first_spike_bins_np(y):
+    time_mass = np.asarray(y).sum(axis=1)
+    active = time_mass.sum(axis=1) > 0
+    first = np.full(time_mass.shape[0], np.nan, dtype=np.float64)
+    if np.any(active):
+        first[active] = np.argmax(time_mass[active] > 0, axis=1)
+    return first, active
+
+
+def compute_distributional_metrics(y_true, pred_prob, prefix="model", early_window=EARLY_TIME_WINDOW, topks=(50, 100, 200, 500)):
+    y_true = np.asarray(y_true, dtype=np.float32)
+    pred_prob = np.asarray(pred_prob, dtype=np.float32)
+    eps = 1e-8
+    out = {}
+
+    p_clip = np.clip(pred_prob, 1e-5, 1.0 - 1e-5)
+    pos_mask = y_true > 0.5
+    neg_mask = ~pos_mask
+    out[f"{prefix}_positive_bin_bce"] = float(-np.log(p_clip[pos_mask]).mean()) if np.any(pos_mask) else np.nan
+    out[f"{prefix}_negative_bin_bce"] = float(-np.log1p(-p_clip[neg_mask]).mean()) if np.any(neg_mask) else np.nan
+
+    true_counts = y_true.sum(axis=(1, 2))
+    pred_counts = pred_prob.sum(axis=(1, 2))
+    out[f"{prefix}_count_corr"] = corr_safe(true_counts, pred_counts)
+    out[f"{prefix}_count_mae"] = float(np.mean(np.abs(true_counts - pred_counts)))
+    out[f"{prefix}_count_rmse"] = float(np.sqrt(np.mean((true_counts - pred_counts) ** 2)))
+    out[f"{prefix}_mean_true_count"] = float(true_counts.mean())
+    out[f"{prefix}_mean_pred_count"] = float(pred_counts.mean())
+
+    true_time = y_true.sum(axis=1)
+    pred_time = pred_prob.sum(axis=1)
+    true_spatial = y_true.sum(axis=2)
+    pred_spatial = pred_prob.sum(axis=2)
+    out[f"{prefix}_temporal_kl"] = _distribution_kl_np(true_time, pred_time)
+    out[f"{prefix}_spatial_kl"] = _distribution_kl_np(true_spatial, pred_spatial)
+    a, b = tuple(early_window)
+    a = max(0, int(a)); b = min(y_true.shape[2], int(b))
+    out[f"{prefix}_early_temporal_kl"] = _distribution_kl_np(true_time[:, a:b], pred_time[:, a:b]) if b > a else np.nan
+
+    true_first, active = _first_spike_bins_np(y_true)
+    if np.any(active):
+        pred_peak = np.argmax(pred_time, axis=1).astype(np.float64)
+        pred_dist = (pred_time + eps) / (pred_time.sum(axis=1, keepdims=True) + eps * pred_time.shape[1])
+        t = np.arange(pred_time.shape[1], dtype=np.float64)
+        pred_expected = (pred_dist * t[None, :]).sum(axis=1)
+        out[f"{prefix}_first_spike_mae_peak_bin"] = float(np.nanmean(np.abs(pred_peak[active] - true_first[active])))
+        out[f"{prefix}_first_spike_mae_expected_bin"] = float(np.nanmean(np.abs(pred_expected[active] - true_first[active])))
+    else:
+        out[f"{prefix}_first_spike_mae_peak_bin"] = np.nan
+        out[f"{prefix}_first_spike_mae_expected_bin"] = np.nan
+
+    flat_pred = pred_prob.reshape(pred_prob.shape[0], -1)
+    flat_true = y_true.reshape(y_true.shape[0], -1)
+    for k in topks:
+        kk = min(int(k), flat_pred.shape[1])
+        captures = []
+        precisions = []
+        for i in range(flat_pred.shape[0]):
+            true_pos = flat_true[i].sum()
+            if true_pos <= 0:
+                continue
+            top = np.argpartition(-flat_pred[i], kk - 1)[:kk]
+            hits = flat_true[i, top].sum()
+            captures.append(float(hits / true_pos))
+            precisions.append(float(hits / kk))
+        out[f"{prefix}_top{k}_true_spike_capture"] = float(np.mean(captures)) if captures else np.nan
+        out[f"{prefix}_top{k}_precision"] = float(np.mean(precisions)) if precisions else np.nan
+    return out
+
+
+def write_distributional_diagnostics(var_dir, variant_name, y_true, pred_prob, global_prob, pattern_prob, val_patterns_ordered):
+    rows = []
+    for label, probs in [("model", pred_prob), ("global", global_prob), ("pattern", pattern_prob)]:
+        row = {"variant": variant_name, "predictor": label, "group": "all", "value": "all", "n_trials": int(y_true.shape[0])}
+        row.update(compute_distributional_metrics(y_true, probs, prefix="metric"))
+        rows.append(row)
+    for p in np.unique(val_patterns_ordered):
+        mask = val_patterns_ordered == p
+        row = {"variant": variant_name, "predictor": "model", "group": "pattern", "value": int(p), "n_trials": int(mask.sum())}
+        row.update(compute_distributional_metrics(y_true[mask], pred_prob[mask], prefix="metric"))
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    df.to_csv(var_dir / "distributional_evaluation_metrics.csv", index=False)
+    return df
 
 
 def _clone_batch(batch):
@@ -1589,6 +1796,11 @@ def train_one_variant(variant):
     context_array = context_info["norm"]
     count_weight = float(cfg.get("aux_count_weight", AUX_COUNT_WEIGHT))
     psth_weight = float(cfg.get("aux_psth_weight", AUX_PSTH_WEIGHT))
+    temporal_kl_weight = float(cfg.get("aux_temporal_kl_weight", AUX_TEMPORAL_KL_WEIGHT))
+    spatial_kl_weight = float(cfg.get("aux_spatial_kl_weight", AUX_SPATIAL_KL_WEIGHT))
+    early_temporal_kl_weight = float(cfg.get("aux_early_temporal_kl_weight", AUX_EARLY_TEMPORAL_KL_WEIGHT))
+    first_time_weight = float(cfg.get("aux_first_time_weight", AUX_FIRST_TIME_WEIGHT))
+    early_time_window = tuple(cfg.get("early_time_window", EARLY_TIME_WINDOW))
     weight_decay = float(cfg.get("weight_decay", WEIGHT_DECAY))
     history_len = int(cfg.get("z_history_len", Z_HISTORY_LEN))
     cfg["context_dim"] = int(context_array.shape[1]) if cfg.get("use_cont_context", True) else 0
@@ -1637,7 +1849,13 @@ def train_one_variant(variant):
             batch_dev = move_batch(batch_raw, device)
             optimizer.zero_grad(set_to_none=True)
             logits = model_forward(model, batch_dev)
-            loss, parts = compute_loss(logits, batch_dev["x"], count_weight=count_weight, psth_weight=psth_weight)
+            loss, parts = compute_loss(
+                logits, batch_dev["x"],
+                count_weight=count_weight, psth_weight=psth_weight,
+                temporal_kl_weight=temporal_kl_weight, spatial_kl_weight=spatial_kl_weight,
+                early_temporal_kl_weight=early_temporal_kl_weight, first_time_weight=first_time_weight,
+                early_time_window=early_time_window,
+            )
             loss.backward()
             if GRAD_CLIP is not None:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
@@ -1652,7 +1870,13 @@ def train_one_variant(variant):
         do_validate = (epoch == 1) or (epoch % VAL_EVERY == 0) or (epoch == N_EPOCHS)
         core = unwrap_model(model)
         if do_validate:
-            val_metrics = evaluate_loader(model, val_loader, device, store_predictions=False, count_weight=count_weight, psth_weight=psth_weight)
+            val_metrics = evaluate_loader(
+                model, val_loader, device, store_predictions=False,
+                count_weight=count_weight, psth_weight=psth_weight,
+                temporal_kl_weight=temporal_kl_weight, spatial_kl_weight=spatial_kl_weight,
+                early_temporal_kl_weight=early_temporal_kl_weight, first_time_weight=first_time_weight,
+                early_time_window=early_time_window,
+            )
             val_bce = val_metrics["bce"]
             scheduler.step(val_bce)
         else:
@@ -1677,6 +1901,15 @@ def train_one_variant(variant):
             batch_size=int(BATCH_SIZE),
             aux_count_weight=float(count_weight),
             aux_psth_weight=float(psth_weight),
+            aux_temporal_kl_weight=float(temporal_kl_weight),
+            aux_spatial_kl_weight=float(spatial_kl_weight),
+            aux_early_temporal_kl_weight=float(early_temporal_kl_weight),
+            aux_first_time_weight=float(first_time_weight),
+            early_time_window=list(early_time_window),
+            val_temporal_kl_loss=float(val_metrics.get("temporal_kl_loss", np.nan)),
+            val_spatial_kl_loss=float(val_metrics.get("spatial_kl_loss", np.nan)),
+            val_early_temporal_kl_loss=float(val_metrics.get("early_temporal_kl_loss", np.nan)),
+            val_first_time_loss=float(val_metrics.get("first_time_loss", np.nan)),
             dropout=float(cfg.get("dropout", np.nan)),
             weight_decay=float(weight_decay),
             use_pattern_embedding=bool(cfg.get("use_pattern_embedding", True)),
@@ -1748,7 +1981,13 @@ def train_one_variant(variant):
     core_model = build_model(cfg, baseline_logits).to(device)
     core_model.load_state_dict(ckpt["model_state_dict"])
     model = maybe_wrap_model(core_model)
-    val_eval = evaluate_loader(model, val_loader, device, store_predictions=True, count_weight=count_weight, psth_weight=psth_weight)
+    val_eval = evaluate_loader(
+        model, val_loader, device, store_predictions=True,
+        count_weight=count_weight, psth_weight=psth_weight,
+        temporal_kl_weight=temporal_kl_weight, spatial_kl_weight=spatial_kl_weight,
+        early_temporal_kl_weight=early_temporal_kl_weight, first_time_weight=first_time_weight,
+        early_time_window=early_time_window,
+    )
     pred_prob = val_eval["pred_prob"]
     y_true = val_eval["true"]
     trial_indices = val_eval["trial_indices"]
@@ -1764,6 +2003,10 @@ def train_one_variant(variant):
     true_counts = y_true.sum(axis=(1, 2))
     pred_counts = pred_prob.sum(axis=(1, 2))
     pattern_counts = pattern_prob.sum(axis=(1, 2))
+    distributional_df = write_distributional_diagnostics(
+        var_dir, name, y_true, pred_prob, global_prob, pattern_prob, val_patterns_ordered
+    )
+    model_distributional_metrics = distributional_df[(distributional_df["predictor"] == "model") & (distributional_df["group"] == "all")].iloc[0].to_dict()
     count_corr_model = corr_safe(true_counts, pred_counts)
     count_corr_pattern = corr_safe(true_counts, pattern_counts)
     count_mae_model = float(np.mean(np.abs(true_counts - pred_counts)))
@@ -1856,6 +2099,22 @@ def train_one_variant(variant):
         weight_decay=float(weight_decay),
         aux_count_weight=float(count_weight),
         aux_psth_weight=float(psth_weight),
+        aux_temporal_kl_weight=float(temporal_kl_weight),
+        aux_spatial_kl_weight=float(spatial_kl_weight),
+        aux_early_temporal_kl_weight=float(early_temporal_kl_weight),
+        aux_first_time_weight=float(first_time_weight),
+        early_time_window=list(early_time_window),
+        dist_temporal_kl=float(model_distributional_metrics.get("metric_temporal_kl", np.nan)),
+        dist_spatial_kl=float(model_distributional_metrics.get("metric_spatial_kl", np.nan)),
+        dist_early_temporal_kl=float(model_distributional_metrics.get("metric_early_temporal_kl", np.nan)),
+        first_spike_mae_peak_bin=float(model_distributional_metrics.get("metric_first_spike_mae_peak_bin", np.nan)),
+        first_spike_mae_expected_bin=float(model_distributional_metrics.get("metric_first_spike_mae_expected_bin", np.nan)),
+        positive_bin_bce=float(model_distributional_metrics.get("metric_positive_bin_bce", np.nan)),
+        negative_bin_bce=float(model_distributional_metrics.get("metric_negative_bin_bce", np.nan)),
+        top50_true_spike_capture=float(model_distributional_metrics.get("metric_top50_true_spike_capture", np.nan)),
+        top100_true_spike_capture=float(model_distributional_metrics.get("metric_top100_true_spike_capture", np.nan)),
+        top200_true_spike_capture=float(model_distributional_metrics.get("metric_top200_true_spike_capture", np.nan)),
+        top500_true_spike_capture=float(model_distributional_metrics.get("metric_top500_true_spike_capture", np.nan)),
         use_pattern_embedding=bool(cfg.get("use_pattern_embedding", True)),
         use_bit_features=bool(cfg.get("use_bit_features", True)),
         current_bit_feature_mode=str(cfg.get("current_bit_feature_mode", "single")),
@@ -1889,6 +2148,7 @@ def train_one_variant(variant):
         elapsed_min=float((time.time() - start) / 60.0),
         best_model_path=str((var_dir / "best_model_this_variant.pth").resolve()),
         feature_importance_csv=str((var_dir / "feature_importance_ablation.csv").resolve()),
+        distributional_metrics_csv=str((var_dir / "distributional_evaluation_metrics.csv").resolve()),
     )
     with open(var_dir / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
