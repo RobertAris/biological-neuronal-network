@@ -68,8 +68,9 @@ print("Checkpoint loader ready.")
 # 2. Configuration: single best C4 current-bits model
 # ============================================================
 Network = 5
-DIV = 21
-group_data = True
+DIV = 40
+group_data = False
+TRAIN_TEST_MODE = False  # supervised training file: shared/N5_DIV40.h5
 
 # Split options: "random", "leave_frequency_out", "leave_pattern_out", "blocked_time".
 # RANDOM_SEED=None draws a fresh random validation split each run.
@@ -94,8 +95,9 @@ MAX_PARALLEL_MODELS = 1
 BATCH_SIZE = 1024
 
 N_EPOCHS = 160
-PATIENCE = 24
-SCHEDULER_PATIENCE = 8
+PATIENCE = 8  # validation checks, not raw epochs
+SCHEDULER_PATIENCE = 4
+EARLY_STOP_MIN_DELTA = 2e-5
 VAL_EVERY = 2
 LEARNING_RATE = 8e-4
 WEIGHT_DECAY = 1e-4
@@ -118,14 +120,15 @@ MAX_Z_HISTORY_LEN = Z_HISTORY_LEN
 Z_GRU_HIDDEN_DIM = 64
 Z_GRU_LAYERS = 2
 
-# Slim C4 history baseline: current pattern bits + frequency-only z-window context
-# + learned z-history GRU. Direct frequency RBFs and one-step previous-pattern
-# context are disabled because the ablation showed little independent value.
-BEST_VARIANT_NAME = "task2_C4_history_slim"
+# Pattern-gated residual model: start from the smoothed pattern baseline,
+# then let a learned per-pattern gate control how strongly the residual decoder
+# can move away from that baseline. This targets the completed-run failure mode
+# where quiet patterns 0/2/8 were already better served by the simple baseline.
+BEST_VARIANT_NAME = "task2_C4_pattern_gate_H24_GRU2_freqRBF16"
 BASE_MODEL_CONFIG = dict(
     pattern_emb_dim=32,
     bit_emb_dim=16,
-    freq_rbf_dim=0,
+    freq_rbf_dim=16,
     cond_dim=96,
     electrode_emb_dim=24,
     hidden_dim=96,
@@ -135,9 +138,12 @@ BASE_MODEL_CONFIG = dict(
     dropout=0.12,
     pattern_baseline_alpha=25.0,
 
-    baseline_mode="global",
-    use_frequency_features=False,
-    use_rbf_features=False,
+    baseline_mode="pattern",
+    use_pattern_residual_gate=True,
+    pattern_residual_gate_min=0.05,
+    pattern_residual_gate_init_max=0.95,
+    use_frequency_features=True,
+    use_rbf_features=True,
     use_frequency_film=False,
 
     use_prev_z_context=True,
@@ -145,7 +151,7 @@ BASE_MODEL_CONFIG = dict(
     use_bit_features=True,
     current_bit_feature_mode="single",
     current_bit_encoder="linear",
-    use_prev_pattern_context=False,
+    use_prev_pattern_context=True,
     use_prev_pattern_bit_context=False,
     use_cont_context=True,
     use_coordinates=True,
@@ -161,7 +167,7 @@ BASE_MODEL_CONFIG = dict(
     z_gru_layers=Z_GRU_LAYERS,
     z_history_pattern_mode="embedding",
 
-    deploy_context_mode="z_window_frequency_context",
+    deploy_context_mode="z_window_summary",
     aux_count_weight=AUX_COUNT_WEIGHT,
     aux_psth_weight=AUX_PSTH_WEIGHT,
     aux_temporal_kl_weight=AUX_TEMPORAL_KL_WEIGHT,
@@ -188,17 +194,18 @@ def variant(name, group, question, description, changes=None, **meta):
 VARIANTS = [
     variant(
         BEST_VARIANT_NAME,
-        "single_slim",
-        "slim_history_baseline",
-        "Simplified C4 model: current bits linear, no direct frequency encoder, frequency-only z-window context, and a two-layer 24-step z-history GRU.",
+        "single_pattern_gated",
+        "pattern_gated_residual",
+        "Pattern-baseline C4 model with learned pattern-specific residual gating, RBF16 frequency features, z-window context, and a two-layer 24-step z-history GRU.",
         history_strategy="H24_D64_embedding_layers2",
-        freq_strategy="no_direct_freq_window_freq_context",
+        freq_strategy="pattern_baseline_gate_rbf16_plus_context",
     )
 ]
 
-RUN_NAME = f"{BEST_VARIANT_NAME}_N{Network}_DIV{DIV}_{SPLIT_MODE}"
-OUT_DIR = Path(f"{BEST_VARIANT_NAME}_outputs_{RUN_NAME}")
-OUT_DIR.mkdir(exist_ok=True)
+RUN_NAME = f"{BEST_VARIANT_NAME}_N{Network}_DIV{DIV}_shared_final_{SPLIT_MODE}"
+OUTPUT_ROOT = Path("task2_outputs") / "current_best"
+OUT_DIR = OUTPUT_ROOT / RUN_NAME
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 if torch.cuda.is_available():
     device = torch.device(f"cuda:{PRIMARY_CUDA_DEVICE}")
@@ -264,8 +271,13 @@ def corr_safe(a, b):
 # ============================================================
 # 4. Load and standardize data
 # ============================================================
-data = load_data(Network, DIV, group_data)
+data = load_data(Network, DIV, group_data, test_mode=TRAIN_TEST_MODE)
 stimulation_parameters, stimulation_patterns, binned_spike_train_responses, stimulation_times, impedance_map, electrodes = data
+if stimulation_parameters is None or binned_spike_train_responses is None:
+    raise ValueError(
+        "Supervised Task 2 training requires stimulation parameters and spike responses. "
+        "Use test_mode=False for the final shared training file."
+    )
 
 print("Raw stimulation_parameters shape:", np.asarray(stimulation_parameters).shape)
 print("Raw stimulation_patterns shape:", np.asarray(stimulation_patterns).shape)
@@ -987,6 +999,8 @@ class CoordGraphTemporalResidualDecoder(nn.Module):
         self.use_electrode_rate = bool(config.get("use_electrode_rate", True))
         self.use_graph = bool(config.get("use_graph", True))
         self.use_cond_time_bias = bool(config.get("use_cond_time_bias", True))
+        self.use_pattern_residual_gate = bool(config.get("use_pattern_residual_gate", False))
+        self.pattern_residual_gate_min = float(config.get("pattern_residual_gate_min", 0.0))
         if self.use_pattern_embedding:
             self.pattern_emb = nn.Embedding(n_patterns, pattern_emb_dim)
             pattern_cond_dim = pattern_emb_dim
@@ -1114,6 +1128,10 @@ class CoordGraphTemporalResidualDecoder(nn.Module):
         nn.init.zeros_(self.cond_time_bias[-1].weight)
         nn.init.zeros_(self.cond_time_bias[-1].bias)
         self.residual_scale = nn.Parameter(torch.tensor(0.2))
+        if self.use_pattern_residual_gate:
+            self.pattern_residual_gate_logit = nn.Embedding(n_patterns, 1)
+        else:
+            self.pattern_residual_gate_logit = None
 
         with torch.no_grad():
             p = torch.sigmoid(self.pattern_baseline_logits.float())
@@ -1122,6 +1140,30 @@ class CoordGraphTemporalResidualDecoder(nn.Module):
             self.register_buffer("electrode_rate", electrode_rate.float())
             idx = torch.linspace(-1, 1, n_electrodes)
             self.register_buffer("electrode_index_norm", idx.float())
+            if self.pattern_residual_gate_logit is not None:
+                pattern_activity = p.mean(dim=(1, 2))
+                lo = float(pattern_activity.min())
+                hi = float(pattern_activity.max())
+                activity_norm = (pattern_activity - lo) / max(hi - lo, 1e-6)
+                gate_min = float(self.pattern_residual_gate_min)
+                gate_max = float(config.get("pattern_residual_gate_init_max", 0.95))
+                init_gate = gate_min + (gate_max - gate_min) * activity_norm
+                init_gate = init_gate.clamp(gate_min + 1e-4, 1.0 - 1e-4)
+                sigmoid_arg = ((init_gate - gate_min) / max(1.0 - gate_min, 1e-6)).clamp(1e-4, 1.0 - 1e-4)
+                self.pattern_residual_gate_logit.weight.copy_(torch.logit(sigmoid_arg)[:, None])
+                self.register_buffer("initial_pattern_residual_gate", init_gate.float())
+
+    def pattern_residual_gates(self):
+        if self.pattern_residual_gate_logit is None:
+            return torch.ones(self.n_patterns, device=self.pattern_baseline_logits.device)
+        pattern = torch.arange(self.n_patterns, device=self.pattern_residual_gate_logit.weight.device)
+        return self.residual_gate(pattern).view(-1)
+
+    def residual_gate(self, pattern):
+        if self.pattern_residual_gate_logit is None:
+            return None
+        gate = self.pattern_residual_gate_min + (1.0 - self.pattern_residual_gate_min) * torch.sigmoid(self.pattern_residual_gate_logit(pattern))
+        return gate.view(-1, 1, 1)
 
     def pattern_bits(self, pattern):
         return torch.stack([((pattern >> b) & 1).float() for b in range(4)], dim=-1)
@@ -1200,6 +1242,9 @@ class CoordGraphTemporalResidualDecoder(nn.Module):
             residual = residual + self.cond_time_bias(cond)[:, None, :]
 
         baseline = self.pattern_baseline_logits[pattern]
+        gate = self.residual_gate(pattern)
+        if gate is not None:
+            residual = residual * gate
         return baseline + self.residual_scale * residual
 
 
@@ -1836,6 +1881,8 @@ def train_one_variant(variant):
     best_val_bce = float("inf")
     best_epoch = -1
     epochs_without_improvement = 0
+    stopped_early = False
+    stop_reason = "max_epochs"
     history = []
     start = time.time()
 
@@ -1897,6 +1944,9 @@ def train_one_variant(variant):
             validation_performed=bool(do_validate),
             lr=float(optimizer.param_groups[0]["lr"]),
             residual_scale=float(core.residual_scale.detach().cpu()),
+            residual_gate_mean=float(core.pattern_residual_gates().detach().mean().cpu()),
+            residual_gate_min=float(core.pattern_residual_gates().detach().min().cpu()),
+            residual_gate_max=float(core.pattern_residual_gates().detach().max().cpu()),
             context_dim=int(cfg["context_dim"]),
             batch_size=int(BATCH_SIZE),
             aux_count_weight=float(count_weight),
@@ -1932,10 +1982,13 @@ def train_one_variant(variant):
         )
         history.append(rec)
 
-        if do_validate and val_bce < best_val_bce:
+        improved = bool(do_validate and val_bce < best_val_bce)
+        improved_enough_for_patience = bool(do_validate and val_bce < best_val_bce - EARLY_STOP_MIN_DELTA)
+        if improved:
             best_val_bce = float(val_bce)
             best_epoch = int(epoch)
-            epochs_without_improvement = 0
+            if improved_enough_for_patience:
+                epochs_without_improvement = 0
             torch.save({
                 "model_state_dict": core.state_dict(),
                 "best_val_bce": best_val_bce,
@@ -1966,21 +2019,40 @@ def train_one_variant(variant):
                 "split_mode": SPLIT_MODE,
                 "run_name": RUN_NAME,
             }, var_dir / "best_model_this_variant.pth")
-        elif do_validate:
+        if do_validate and not improved_enough_for_patience:
             epochs_without_improvement += 1
 
         val_display = f"{val_bce:.5f}" if do_validate else "skip"
         pbar.set_postfix(train_bce=f"{train_bce:.5f}", val_bce=val_display, best=f"{best_val_bce:.5f}", lr=f"{optimizer.param_groups[0]['lr']:.1e}")
         if do_validate and epochs_without_improvement >= PATIENCE:
+            stopped_early = True
+            stop_reason = f"early_stop_no_val_improvement_{PATIENCE}_checks_min_delta_{EARLY_STOP_MIN_DELTA}"
+            print(f"Early stopping {name} at epoch {epoch}: best_val_bce={best_val_bce:.6f} at epoch {best_epoch}", flush=True)
             break
 
     hist_df = pd.DataFrame(history)
+    if len(hist_df):
+        hist_df["stopped_early"] = bool(stopped_early)
+        hist_df["stop_reason"] = stop_reason
     hist_df.to_csv(var_dir / "training_history.csv", index=False)
 
     ckpt = torch_load_checkpoint(var_dir / "best_model_this_variant.pth", map_location=device)
     core_model = build_model(cfg, baseline_logits).to(device)
     core_model.load_state_dict(ckpt["model_state_dict"])
     model = maybe_wrap_model(core_model)
+    best_core_for_gates = unwrap_model(model)
+    gate_values = best_core_for_gates.pattern_residual_gates().detach().cpu().numpy()
+    baseline_prob_by_pattern = 1.0 / (1.0 + np.exp(-baseline_logits))
+    gate_df = pd.DataFrame({
+        "pattern": np.arange(n_patterns, dtype=int),
+        "residual_gate": gate_values.astype(float),
+        "baseline_mean_prob": baseline_prob_by_pattern.mean(axis=(1, 2)).astype(float),
+        "baseline_expected_spike_count": baseline_prob_by_pattern.sum(axis=(1, 2)).astype(float),
+    })
+    if hasattr(best_core_for_gates, "initial_pattern_residual_gate"):
+        gate_df["initial_residual_gate"] = best_core_for_gates.initial_pattern_residual_gate.detach().cpu().numpy().astype(float)
+    gate_df.to_csv(var_dir / "pattern_residual_gates.csv", index=False)
+
     val_eval = evaluate_loader(
         model, val_loader, device, store_predictions=True,
         count_weight=count_weight, psth_weight=psth_weight,
@@ -2126,10 +2198,21 @@ def train_one_variant(variant):
         use_rbf_features=bool(cfg.get("use_rbf_features", True)),
         use_frequency_film=bool(cfg.get("use_frequency_film", False)),
         freq_rbf_dim=int(cfg.get("freq_rbf_dim", 0)),
+        baseline_mode=str(cfg.get("baseline_mode", "pattern")),
+        use_pattern_residual_gate=bool(cfg.get("use_pattern_residual_gate", False)),
+        pattern_residual_gate_min=float(cfg.get("pattern_residual_gate_min", 0.0)),
         train_patterns=np.unique(patterns[train_indices]).astype(int).tolist(),
         val_patterns=np.unique(patterns[val_indices]).astype(int).tolist(),
         best_val_bce=float(best_val_bce),
         best_epoch=int(best_epoch),
+        stopped_early=bool(stopped_early),
+        stop_reason=stop_reason,
+        patience_val_checks=int(PATIENCE),
+        early_stop_min_delta=float(EARLY_STOP_MIN_DELTA),
+        residual_gate_mean=float(gate_df["residual_gate"].mean()),
+        residual_gate_min=float(gate_df["residual_gate"].min()),
+        residual_gate_max=float(gate_df["residual_gate"].max()),
+        pattern_residual_gates_csv=str((var_dir / "pattern_residual_gates.csv").resolve()),
         val_global_bce=float(global_bce),
         val_pattern_bce=float(pattern_bce),
         improvement_vs_global_percent=float((global_bce - model_bce) / global_bce * 100),

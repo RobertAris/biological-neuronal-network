@@ -1,2 +1,0 @@
-split_id,best_val_bce,best_epoch,epochs_run,final_train_bce,final_val_bce,final_val_train_gap,improvement_vs_global_percent,improvement_vs_pattern_percent,total_count_corr_model,total_count_mae_model,train_patterns,val_patterns
-random,0.0341019448398807,92,148,0.032468545928826,0.0343135836006348,0.0018450376718088,9.957067723656875,5.050808254202041,0.8726308292046895,31.14808464050293,"[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]","[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]"
