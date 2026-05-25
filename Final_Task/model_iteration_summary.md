@@ -41,29 +41,42 @@ Current goal:
 - optimize validation macro-F1 as the primary metric from the final-data PDF, while tracking accuracy as a secondary diagnostic
 - train/evaluate on the final shared Network 5 / DIV 40 dataset only
 
-## Recent Output Evidence
+## Current Status
 
-Old non-final Task 1 trained-run directories were removed because they are not comparable to final Network 5 / DIV 40 training. Their key metrics are preserved in:
+Task 1 has moved from the old ~43% historical result to a near-saturated final-data model on the shared `N5_DIV40.h5` training file.
 
-`task1_outputs/old_task1_runs_summary.md`
+Current best completed run:
 
-Historical conclusions from those runs:
+`task1_outputs/task1_N5_DIV40_macro_f1_random_20260524_194723/`
 
-- best old validation accuracy was `43.29%` from `graph_temporal_proto_bit_cnn`
-- the single-network run peaked early and then overfit
-- the later multi-network DIV21 loop-topology run peaked lower at `36.41%`
-- pattern IDs are nominal; class-circle assumptions should not drive the Task 1 loss or labels
-- loop/topology information should be used only for electrode and response structure
+Key metrics from that run:
 
-The conclusion is that final Task 1 should be judged on the new shared `N5_DIV40.h5` run, not on old group-data or DIV21 outputs. Task 1 now uses validation macro-F1 for scheduler, early stopping, and checkpoint selection; accuracy is retained as a secondary diagnostic.
+- validation macro-F1: `99.9613%`
+- validation accuracy: `99.9609%`
+- best epoch: `29`
+- validation errors: `3 / 7674`
+- Ridge electrode-time baseline macro-F1: `97.4518%`
+- Ridge electrode-time baseline accuracy: `97.4590%`
+
+The neural model fixed `192 / 195` Ridge validation mistakes and introduced no new mistakes relative to Ridge on the seed-42 validation split. The remaining mistakes were:
+
+| frequency | true pattern | predicted pattern |
+| ---: | ---: | ---: |
+| 3 Hz | 5 | 1 |
+| 12 Hz | 1 | 5 |
+| 38 Hz | 7 | 3 |
+
+A concise retained run summary is stored in:
+
+`task1_outputs/task1_final_runs_summary.md`
 
 ## Current Task 1 Architecture
 
-The current Task 1 model is a graph-temporal classifier running on the final shared Network 5 / DIV 40 data. The code remains multi-network-capable, but the active final configuration intentionally uses only Network 5.
+The current Task 1 model is a hybrid raw-electrode-time + graph-temporal classifier. The main lesson from the baseline analysis was that the final data are highly separable in coarse electrode-time response space, so the model now preserves that direct signal instead of forcing all information through graph pooling.
 
 High-level idea:
 
-`response tensor -> temporal electrode features -> spatial graph aggregation -> pooled trial representation -> pattern class logits`
+`response tensor -> raw electrode-time MLP branch + temporal graph branch + prototypes + class attention -> pattern logits`
 
 The model predicts one of the 16 stimulation patterns.
 
@@ -72,96 +85,96 @@ The model predicts one of the 16 stimulation patterns.
 For each trial, the model uses:
 
 - binned neural response tensor
-- stimulation frequency
 - network ID
 - electrode mask for padded electrodes
 - physical electrode coordinates when available
 - electrode-level static features
 - train-only per-network electrode activity rates
 
-The architecture still supports padded multi-network inputs, but the final run has one active network with 105 electrodes. The mask remains useful as a compatibility and safety mechanism.
+Frequency features are supported by the code but are disabled by default:
 
-### Multi-network handling
+```python
+USE_FREQUENCY_FEATURES = False
+```
 
-The notebook loads only Network `5` at DIV `40` from the shared final-data folder. The model still carries a `network_id` embedding for compatibility with the earlier architecture, but in the final setup it has a single active network domain.
+The response tensor alone was enough for strong validation performance, and disabling frequency keeps Task 1 inference less dependent on metadata.
 
-### Temporal response encoder
+### Raw Electrode-Time Branch
 
-For each electrode, the response over time is passed through shared temporal convolutional layers. This produces an electrode-level temporal feature vector.
+The direct branch uses coarse response features that mirror the strong Ridge baseline:
 
-Why this matters:
+- adaptive electrode-time windows, currently `RAW_TIME_WINDOWS = 8`
+- electrode activity marginals
+- time activity marginals
+- total activity
+- LayerNorm + MLP + additive class logits
 
-- Task 1 is not only about total firing rate
-- spike timing and response shape can disambiguate patterns
-- shared temporal filters reduce overfitting compared with fully flattening the response
+This branch is the main protection against losing electrode-time identity.
 
-### Electrode features
+### Temporal Graph Branch
 
-Each electrode representation combines:
+The graph path is retained as an auxiliary learned representation:
 
-- temporal response features
-- physical 2D coordinates
-- electrode index embedding
-- electrode activity/rate feature
-- network embedding
+- shared temporal convolutions per electrode
+- electrode coordinate and identity features
+- train-only electrode activity/impedance/ring-index static features
+- multi-relation graph message passing over kNN/ring/self relations
+- masked mean/max/std pooling
 
-This is meant to keep electrode identity and physical position available without forcing the model to memorize one fixed network layout.
+The graph branch can add spatial context, but it is no longer the only path to the classifier.
 
-### Graph block
+### Class Attention And Prototypes
 
-The model builds a k-nearest-neighbor graph from electrode coordinates and applies graph-style message passing with batch matrix multiplication.
+The model also includes:
 
-Why this matters:
+- class-specific attention pooling over electrode states
+- train-derived class prototypes in raw response space
+- learnable scales for raw branch, class attention, and prototypes
 
-- nearby electrodes tend to have correlated response structure
-- stimulation patterns may create spatially organized response fields
-- graph aggregation gives each electrode local spatial context before global pooling
+In the best checkpoint, the learned scales were roughly:
 
-### Masked pooling
+- raw branch scale: `1.10`
+- prototype scale: `1.09`
+- class-attention scale: `0.40`
 
-After graph processing, the model pools electrode states with masked statistics:
+### Training Setup
 
-- masked mean
-- masked max
-- masked standard deviation
+Current defaults:
 
-The mask prevents padded electrodes from contributing. Using several pooling statistics gives the classifier access to both global activity and localized high-response events.
+```python
+SPLIT_MODE = "random"
+VAL_FRAC = 0.10
+RANDOM_SEED = 1337
+n_epochs = 100
+batch_size = 256
+learning_rate = 8e-4
+weight_decay = 1e-4
+MODEL_DROPOUT = 0.14
+RESPONSE_NOISE_STD = 0.0
+ELECTRODE_DROPOUT_PROB = 0.0
+TIME_DROPOUT_PROB = 0.0
+```
 
-### Frequency and prototype features
-
-Frequency features are concatenated into the trial-level classifier input. The model also contains train-derived network-specific class prototypes and adds prototype similarity as an auxiliary signal to the class logits.
-
-Why this matters:
-
-- frequency changes response strength and timing
-- prototypes give a simple stabilizing reference for each class/network
-- the learned classifier can still override the prototype signal
-
-### Heads and losses
-
-The model has:
-
-- a 16-class pattern classification head
-- an auxiliary bit head for the 4-bit pattern representation
-
-Training uses:
-
-- cross entropy with light label smoothing
-- auxiliary bit consistency loss
-- response augmentation with small noise/electrode/time dropout
-
-The auxiliary bit head is not the final output; it is there to encourage the class representation to respect the binary pattern structure.
+The old heavy regularization was removed because the final dataset is large and the discriminative response pattern is crisp.
 
 ## Current Task 1 Evaluation
 
 The notebook writes new runs as:
 
-`task1_outputs/task1_multinet_<split_mode>_<timestamp>/`
+`task1_outputs/task1_N5_DIV40_macro_f1_<split_tag>_<timestamp>/`
+
+For random splits, the run name now includes the split seed, for example:
+
+`task1_N5_DIV40_macro_f1_random_seed1337_<timestamp>/`
 
 Important files:
 
 - `summary.json`
 - `training_history.csv`
+- `ridge_baseline_summary.json`
+- `ridge_baseline_validation_predictions.csv`
+- `f1_summary.csv`
+- `f1_by_pattern.csv`
 - `accuracy_by_pattern.csv`
 - `accuracy_by_frequency.csv`
 - `accuracy_by_network.csv`
@@ -173,54 +186,77 @@ Important files:
 
 It also saves the global best checkpoint to:
 
-`/home/bnn_10fs26/best_model_final_task_1_multinetwork_graph_proto_bits.pth`
+`/home/bnn_10fs26/best_model_final_task_1_N5_DIV40_macro_f1.pth`
 
 ## Task 1 Splits
 
 Default split:
 
-`SPLIT_MODE = "random"`
+```python
+SPLIT_MODE = "random"
+RANDOM_SEED = 1337
+```
 
-This estimates validation performance on held-out trials from the final shared Network 5 / DIV 40 training file. `leave_network_out` is no longer meaningful for the active final setup because only Network 5 is used.
+The previous completed run used the original seed-42 split before seed metadata was added to run names. The seed-1337 split was smoke-tested with the Ridge baseline:
+
+- Ridge validation accuracy: `97.6023%`
+- Ridge validation macro-F1: `97.5937%`
+- validation samples: `7674`
+- overlap with old seed-42 validation set: `706 / 7674` samples (`9.20%`)
+
+For an overfitting check, retrain from scratch on seed 1337. Do not only evaluate the seed-42 checkpoint on seed 1337, because about `90.80%` of seed-1337 validation samples were training samples in the seed-42 run.
 
 ## Task 1 Conclusions So Far
 
-What still looks useful for the final run:
+What worked:
 
-- physical electrode coordinates instead of pure flattening
-- electrode graph aggregation over neighboring/topological relations
-- masked mean/max/std pooling
-- light response regularization and early stopping
-- nominal 16-class pattern labels without circular class smoothing
+- preserving coarse electrode-time identity directly
+- using a Ridge baseline as a floor and sanity check
+- adding a raw electrode-time MLP branch to the neural model
+- keeping the graph/prototype path as an additive correction rather than a bottleneck
+- disabling frequency features by default
+- reducing regularization and response dropout
 
 What old runs warned against:
 
-- simply training longer after validation plateaus
-- relying on multi-network DIV21 transfer as if it were comparable to final data
+- judging final Task 1 by old non-final/group-data outputs
+- relying on graph pooling as the only route to class logits
 - treating pattern IDs as adjacent classes on a pattern circle
-- reading high training accuracy as progress when validation accuracy is flat
+- using heavy response/electrode/time dropout before the model beats the linear floor
 
-The next decisive result is the first completed final Network 5 / DIV 40 Task 1 run.
+Next useful check:
+
+- run a full seed-1337 retrain from scratch and compare macro-F1/errors against the seed-42 result.
 
 # Task 2
 
 ## Current Notebooks
 
-Current best stable notebook:
-
-`task2_best_model.ipynb`
-
-Current best worker:
-
-`task2_best_model_worker.py`
-
-Spike-localization exploration notebook:
+Active final-data notebook:
 
 `task2_hybrid_spike_localization_model.ipynb`
 
-Current best model name:
+Grid-search notebook:
+
+`task2_w1_grid_search.ipynb`
+
+Baseline-compatible notebook:
+
+`task2_best_model.ipynb`
+
+Baseline worker:
+
+`task2_best_model_worker.py`
+
+Current active model name:
+
+`task2_hybrid_gated_topology`
+
+Historical stable C4 baseline name:
 
 `task2_best_C4_bits_H24_GRU2_freqRBF16`
+
+The C4 notebook remains useful as a sanity baseline, but the active final-data model is now the hybrid W1-centered spike-localization notebook.
 
 ## Task 2 Output Structure
 
@@ -235,61 +271,98 @@ Current final-data output folder:
 Retention layout:
 
 - `current_run/` stores the latest run
-- `previous_run/` stores the immediately preceding run after the next training run
+- `previous_run/` stores the immediately preceding completed/attempted run
 - `best_run/` stores the best retained run by `final_metric_proxy_weighted_w1_ms`
 
-
-Latest completed hybrid run:
-
-- raw model weighted W1 proxy: `0.4138 ms`
-- pattern-baseline weighted W1 proxy: `0.5241 ms`
-- improvement over pattern baseline: `21.0%`
-- count correlation: `0.9237` model vs `0.8679` pattern baseline
-- raw model wins on `403/537` pattern-frequency cells, so remaining errors are concentrated condition-level failures rather than a global model failure
-
-The notebook is now W1-centered. New runs write a validation-tuned model/pattern-baseline blend (`w1_blend_*.csv`) and ranked condition-level W1 diagnostics (`condition_w1_*.csv` plus heatmaps). The blend is deliberately post-hoc and validation-selected: it lets the submitted predictor fall back to the pattern baseline only in cells where validation W1 says the baseline is safer.
-
-Old DIV21 Task 2 outputs were removed because they are not comparable to final data. Their key metrics are preserved in:
+Old DIV21 Task 2 outputs were removed because they are not comparable to final Network 5 / DIV 40 training. Their key metrics are preserved in:
 
 `task2_outputs/old_div21_runs_summary.md`
 
-## Task 2 Objective
+## Latest Completed/Retained Evidence
+
+The best retained fully summarized hybrid run currently reports:
+
+- final blended weighted W1 proxy: `0.4018 ms`
+- raw model weighted W1 proxy: `0.4293 ms`
+- pattern-only baseline weighted W1 proxy: `0.5203 ms`
+- validation blend improvement over raw model: `6.4%`
+- validation blend improvement over pattern baseline: `22.8%`
+- best epoch: `96`
+- checkpoint metric at that time: validation temporal-W1 proxy `0.06477`
+
+A later fixed-seed run using the pattern-frequency baseline and categorical current-pattern embedding completed successfully but did not beat the retained best:
+
+- final blended weighted W1 proxy: `0.4034 ms`
+- raw model weighted W1 proxy: `0.4405 ms`
+- pattern-frequency baseline weighted W1 proxy: `0.4466 ms`
+- pattern-only baseline weighted W1 proxy: `0.5287 ms`
+- best epoch: `18`
+
+The raw residual model barely improved over the pattern-frequency baseline, which showed that most of the final gain came from validation blending. Pattern `0` was the clearest failure case: pattern-frequency W1 was worse than the simpler pattern-only baseline, and the residual gate was near its minimum, so the model mostly copied the wrong baseline for that quiet sparse pattern.
+
+Earlier crash note, now fixed: a previous run reached the final evaluation stage but crashed in post-training W1 blend evaluation because `optimize_validation_w1_blend` referenced `blend_anchor_prob` inside the helper instead of its local `pattern_prob` argument. The helper now uses its local anchor argument correctly.
+
+Partial evidence from that crashed run:
+
+- best validation temporal-W1 proxy: `0.065516` at epoch `122`
+- previous retained best validation temporal-W1 proxy: `0.064770`
+- relation gates learned approximately `knn=0.979`, `soft_loop=0.666`, `response_corr=0.827`, `self=0.584`
+- pattern-frequency baseline and categorical pattern embedding did not obviously improve the temporal-W1 proxy by themselves
+
+Conclusion: the next run should not rely only on the better baseline. It should use a baseline that backs off for quiet patterns and select/check final predictions with the same kind of W1-aware model/baseline blending used after training.
+
+## Current Task 2 Objective
 
 Task 2 predicts the full neural response distribution for a stimulation trial:
 
 `[electrodes, time_bins]`
 
-The TA feedback suggested that final evaluation is unlikely to be exact-response BCE only. It likely cares about distributional properties such as:
+The final-data PDF emphasizes normalized 1 ms PSTH Wasserstein-1 distance. The active notebook therefore treats weighted W1 as the primary final-style metric, while BCE, count calibration, and active-bin diagnostics remain guardrails.
 
-- whether firing rate matches the stimulus
-- whether first-spike timing matches
-- whether the predicted response distribution is plausible
+Important metrics now written after a completed run include:
 
-This is why the later Task 2 work added count, PSTH, top-activity, and spike-localization diagnostics in addition to BCE.
+- raw model weighted W1 proxy
+- blended weighted W1 proxy
+- pattern baseline weighted W1 proxy
+- pattern-frequency baseline weighted W1 proxy
+- ranked pattern-frequency W1 table
+- pattern-frequency W1 heatmap
+- validation blend tables by condition, pattern, and condition-electrode
+- distributional diagnostics such as count MAE/correlation and top-k spike capture
 
 ## Current Task 2 Architecture
 
-The current best Task 2 model is a coordinate-aware graph temporal residual decoder conditioned on current stimulus, frequency, and recent stimulation history.
+The active model is a coordinate-aware graph temporal residual decoder conditioned on current stimulus, frequency, and recent stimulation history.
 
 High-level formula:
 
 `logits = baseline_logits + residual_scale * learned_residual`
 
-The model outputs spike probabilities for every electrode/time bin.
+The baseline is now a train-only pattern-frequency baseline with activity-adaptive smoothing rather than only a pattern baseline:
+
+`baseline_mode = "pattern_frequency"`
+
+`pattern_frequency_baseline_alpha = 5.0`
+
+`pattern_frequency_activity_alpha_boost = 1.0`
+
+This was chosen because validation probes showed the pattern-frequency baseline has much better W1 overall, but quiet patterns such as pattern `0` can get worse when split too finely by frequency. The adaptive pseudo-count pulls low-activity patterns back toward the pooled pattern-only template while keeping active patterns frequency-specific. The baseline is used as the residual anchor, not as a replacement for the neural model.
 
 ## Task 2 Inputs
 
-For each trial, the model uses:
+For each trial, the active hybrid model uses:
 
-- current stimulation pattern represented as 4 current bits
-- current frequency
+- current stimulation pattern ID as a categorical embedding
+- current stimulation pattern as four binary bits
+- current frequency with normalized/log/Fourier/RBF16 features
 - previous pattern ID
 - causal z-window schedule summary
 - 24-step previous-stimulation history
 - electrode coordinates
+- circular/topological electrode features
 - electrode IDs
 - electrode-rate features
-- fixed electrode graph adjacency
+- gated hybrid electrode graph relations
 
 The target is the binned response tensor:
 
@@ -297,15 +370,14 @@ The target is the binned response tensor:
 
 ## Current Pattern Representation
 
-The current pattern is represented by four binary bits:
+Pattern IDs are nominal stimulation IDs. They are not treated as adjacent classes on a pattern circle.
 
-`[(pattern >> 0) & 1, ..., (pattern >> 3) & 1]`
+The current active Task 2 model uses both:
 
-Those bits are passed through a linear projection:
+- categorical current-pattern embedding
+- 4-bit pattern features
 
-`4 -> 16`
-
-The current model deliberately does not use a learned current-pattern ID embedding. The reason is that a direct ID embedding can memorize pattern identity and may generalize poorly if the goal is to exploit pattern structure.
+The categorical embedding was restored because bit-only encoding was probably too restrictive for Task 2. The 4-bit features remain available as compact structure, but the model no longer has to pretend that bit similarity fully explains response similarity.
 
 ## Frequency Representation
 
@@ -316,11 +388,7 @@ The current model uses a compact direct frequency encoder with:
 - Fourier features on log-frequency
 - 16 RBF features on log-frequency
 
-Total direct frequency dimension:
-
-`26`
-
-More elaborate frequency machinery was tested and did not help enough to keep.
+More elaborate frequency machinery such as frequency FiLM/gating was tested earlier and did not help enough to keep.
 
 ## Causal Z-window Context
 
@@ -340,7 +408,7 @@ This context stayed because it is cheap, causal, and useful.
 
 ## Z-history GRU
 
-The best history encoder uses:
+The history encoder uses:
 
 - history length: `24`
 - history pattern mode: categorical embedding
@@ -349,23 +417,7 @@ The best history encoder uses:
 - GRU hidden dim: `64`
 - GRU layers: `2`
 
-This was the most important model improvement in the final grid. The best run was the two-layer H24/D64 GRU variant, not the widest GRU and not the longest history window.
-
-## Condition Vector
-
-The condition vector concatenates:
-
-- current bit projection: `16`
-- frequency encoding: `26`
-- previous pattern embedding: `16`
-- causal z-window context: `28`
-- z-history GRU state: `64`
-
-Total before the condition MLP:
-
-`150`
-
-The condition MLP maps this to a `96`-dimensional condition vector.
+This was the most important model improvement in the final grid. The best history setup was the two-layer H24/D64 GRU variant, not the widest GRU and not the longest history window.
 
 ## Electrode and Graph Decoder
 
@@ -373,16 +425,19 @@ Each electrode receives:
 
 - physical coordinates
 - normalized electrode index
+- circular/topology features from the electrode layout
 - electrode-rate feature
 - learned electrode embedding
 - trial condition vector
 
-The electrode state is processed by graph message passing over a k-nearest-neighbor electrode graph:
+The graph decoder uses gated hybrid relations:
 
-- `graph_k = 8`
-- `n_graph_layers = 2`
+- physical kNN relation, `graph_k = 8`
+- soft loop/topology relation, `loop_graph_k = 3`
+- response-correlation relation, `response_graph_k = 8`
+- self relation
 
-The graph block helps the model use local spatial context instead of predicting each electrode independently.
+The loop information is used only as an electrode/output topology prior. It is not used to impose circular order on pattern IDs.
 
 ## Temporal Decoder
 
@@ -392,79 +447,116 @@ Current setting:
 
 `k_modes = 80`
 
-The temporal features include learned time embeddings plus normalized time, log-time, early-response features, and late-bin indicators.
+The temporal features include learned time embeddings plus normalized time, log-time, early-response features, and late-bin indicators. Globally impossible early bins `0-5` are hard-masked.
 
-## Task 2 Loss
+## Current Task 2 Loss and Checkpointing
 
-The stable current model uses:
+The active run no longer trains with only BCE plus small count/PSTH auxiliaries. It now uses a W1 warmup schedule:
 
-`BCE + 0.03 * count_loss + 0.03 * psth_loss`
+```text
+loss = BCE + 0.03 * count_loss + 0.03 * PSTH_loss + temporal_w1_weight * temporal_W1_loss
 
-BCE remains the main training objective. Count and PSTH losses are kept small because large distributional losses can improve aggregate-looking metrics while hurting precise spike-bin localization.
+epoch 1-20:  temporal_w1_weight = 0.04
+epoch 21-60: temporal_w1_weight = 0.08
+epoch 61+:   temporal_w1_weight = 0.12
+```
+
+BCE remains the calibration anchor. The W1 term becomes stronger later so the model first learns stable spike probabilities, then optimizes timing distribution more directly.
+
+The optimizer is:
+
+```python
+AdamW(lr=8e-4, weight_decay=1e-4)
+```
+
+The scheduler is:
+
+```python
+ReduceLROnPlateau(mode="min", factor=0.5, patience=4)
+```
+
+Checkpoint selection and scheduler stepping now use a blend-aware final-style W1 proxy:
+
+```python
+CHECKPOINT_SELECTION_METRIC = "final_w1_proxy_blend_weighted_w1_ms"
+```
+
+This is a streaming validation proxy for the final weighted 1 ms PSTH W1 metric after conservative model/baseline blending. This matters because the shipped predictor is blended; selecting checkpoints only by raw-model W1 can stop too early or select a model whose residual is not useful after blending. Early stopping uses patience `10` validation checks with `EARLY_STOP_MIN_DELTA = 2e-5`.
+
+## W1 Blend and Diagnostics
+
+After training, the notebook fits a validation-selected multi-anchor blend:
+
+`prediction = alpha * model + (1 - alpha) * baseline`
+
+For the active run, validation can choose either of these anchors per pattern-frequency cell:
+
+- pattern-only baseline
+- activity-smoothed pattern-frequency baseline
+
+The blend is selected by validation W1 at pattern-frequency level, with pattern-level fallback for low-trial cells and optional electrode-level refinement. This directly addresses the pattern `0` failure mode where pattern-frequency was worse than pattern-only.
+
+The previous crash in this path has been fixed: the electrode-level helper now uses the local `pattern_prob`/anchor argument rather than an outer-scope `blend_anchor_prob` variable.
+
+Diagnostics to inspect after each run:
+
+- `psth_wasserstein_metrics.csv`
+- `condition_w1_ranked.csv`
+- `w1_blend_summary.csv`
+- `w1_blend_by_condition.csv`
+- `w1_blend_by_condition_electrode.csv`
+- `plots/w1_by_pattern_freq.png`
+- pattern-frequency baseline panel inside `plots/w1_by_pattern_freq.png`
+- `plots/condition_w1_blend_heatmap.png`
+- `plots/condition_w1_model_minus_pattern_heatmap.png`
 
 ## What Worked in Task 2
 
-The strongest retained ingredients were:
+The strongest retained ingredients are:
 
-- current pattern as 4 bits with a linear projection
+- final-data-only training on Network 5 / DIV 40
+- fixed `RANDOM_SEED = 42` and saved `split_indices.npz`
+- current pattern as nominal categorical ID plus 4-bit features
+- activity-adaptively smoothed train-only pattern-frequency residual baseline
 - 24-step stimulation history
 - two-layer GRU with hidden size 64
-- categorical embeddings for previous-pattern history tokens
+- categorical embeddings for history pattern tokens
 - causal z-window context
 - physical electrode coordinates
 - graph message passing over electrodes
-- residual decoding around a simple baseline
-- small count/PSTH auxiliary losses
-- RBF16 frequency features, but only as simple direct conditioning
+- gated kNN/soft-loop/response-correlation topology relations
+- residual decoding around a baseline
+- blend-aware W1 checkpoint selection and condition-level diagnostics
 
-The final history/frequency grid showed the best model was:
+## What Did Not Work or Needs Caution in Task 2
 
-`hist_H24_D64_layers2`
+The following did not justify becoming the main next change:
 
-with best validation BCE around:
-
-`0.033972`
-
-The one-layer C4 baseline in the same grid was around:
-
-`0.034444`
-
-So the biggest confirmed gain came from better history modeling.
-
-## What Did Not Work in Task 2
-
-The following did not justify keeping in the clean best model:
-
+- treating pattern IDs as adjacent/circular classes
+- relying on pattern-frequency baseline alone without more W1 pressure
+- using only one blend anchor when pattern-only is safer for sparse quiet cells
 - frequency FiLM/gating
 - larger RBF banks such as RBF32
 - direct-frequency-only variants without z-window context
 - using raw bits inside the history GRU
 - very short history windows such as H8
 - simply making the GRU wider without improving temporal depth
-- multi-GPU data parallelism for one small model
-- large spike-localization/ranking losses as direct replacements for BCE
+- large focal/ranking losses as direct replacements for BCE
 
-The reason is mostly the same across these: they added complexity but did not consistently improve validation behavior. Many variants changed the model in several places at once or improved aggregate metrics while not clearly improving the hard spike-localization errors.
+The main caution remains that BCE can look acceptable while final W1 or active-bin localization is still weak. W1, condition-level heatmaps, and top-k active-bin diagnostics should drive decisions.
 
-## Important Task 2 Caveat
-
-The current Task 2 model still risks averaging too much because most bins are zero. BCE can look decent even if rare active bins are poorly localized. This is why future evaluations should always include:
-
-- active-bin recall or top-k hit rate
-- first-spike timing error
-- count correlation and count MAE
-- PSTH similarity
-- high-activity pattern diagnostics
-- per-electrode and per-time-bin error analysis
-
-The current best C4 model is the stable baseline, but the hybrid spike-localization model remains relevant if the final evaluator rewards spike timing and active-region localization more than BCE.
-
-## Current Task 2 Best Configuration
+## Current Task 2 Active Configuration
 
 ```text
-model: task2_best_C4_bits_H24_GRU2_freqRBF16
-current pattern: four bits, linear projection
-current pattern ID embedding: disabled
+model: task2_hybrid_gated_topology
+training data: shared final N5_DIV40.h5 only
+test file: N5_DIV40_test.h5 for inference/submission reference only
+current pattern ID embedding: enabled
+current pattern bits: enabled, linear projection
+baseline mode: pattern_frequency
+pattern-frequency baseline alpha: 5.0
+pattern-frequency activity alpha boost: 1.0
+W1 validation blend anchors: pattern + pattern_frequency
 frequency: normalized/log/Fourier/RBF16 direct encoder
 frequency FiLM: disabled
 context: causal z-window summary, 28 features
@@ -472,17 +564,26 @@ z-history length: 24
 z-history pattern mode: categorical embedding
 z-history GRU hidden dim: 64
 z-history GRU layers: 2
-graph: enabled, k=8, 2 graph layers
+graph: gated hybrid kNN + soft_loop + response_corr + self
+graph k: 8
+loop graph k: 3
+response graph k: 8
 electrode embedding: enabled, dim=24
 temporal modes: 80
 condition dim: 96
 hidden dim: 96
 dropout: 0.12
+optimizer: AdamW
+learning rate: 8e-4
+scheduler: ReduceLROnPlateau, factor 0.5, patience 4
 weight decay: 1e-4
 aux count weight: 0.03
 aux PSTH weight: 0.03
+temporal W1 schedule: 0.04 -> 0.08 -> 0.12
+checkpoint metric: final_w1_proxy_blend_weighted_w1_ms
 batch size: 1024
-max epochs: 160
+max epochs: 180
+early stopping patience: 10 validation checks
 ```
 
 # Big-picture Recommendations
@@ -511,4 +612,9 @@ The most promising future direction is W1-centered calibration and condition-lev
 - use validation-selected model/pattern-baseline blending where it improves W1
 - avoid losses that improve smooth averages but damage active-bin precision
 
-Latest notebook improvement for the next run: the hybrid Task 2 model now uses a smoothed train-only pattern-frequency residual baseline (`baseline_mode="pattern_frequency"`, alpha `5.0`) plus categorical current-pattern embedding alongside the 4-bit features. This was added because the remaining W1 errors are pattern-frequency structured and pattern IDs are nominal. Future runs also use fixed `RANDOM_SEED=42` and save `split_indices.npz` for reproducible comparison.
+Latest active notebook improvement: the hybrid Task 2 model now uses an activity-adaptively smoothed train-only pattern-frequency residual baseline (`baseline_mode="pattern_frequency"`, alpha `5.0`, low-activity boost `1.0`) plus categorical current-pattern embedding alongside the 4-bit features. It also trains with a temporal-W1 schedule (`0.04 -> 0.08 -> 0.12`), selects checkpoints with a blend-aware streaming final-style W1 proxy (`final_w1_proxy_blend_weighted_w1_ms`), and fits a multi-anchor validation blend that can fall back to either pattern-only or pattern-frequency baselines per condition. Runs use fixed `RANDOM_SEED=42` and save `split_indices.npz` for reproducible comparison.
+
+A dedicated grid-search launcher, `task2_w1_grid_search.ipynb`, now supports staged W1-centered sweeps rather than one giant grid. The previous `targeted_next_12` stage found the best current validation result in `grid_targeted_next_12_blend_min8_mass1e4`: blended weighted W1 `0.3641`, raw model W1 `0.4582`, pattern-frequency baseline W1 `0.4464`. The active Task2 notebook now promotes that best proven blend setting (`W1_BLEND_MIN_TRIALS=8`, `W1_BLEND_ELECTRODE_MIN_TRUE_MASS=1e-4`). The new default grid stage is `robust_blend_next_16`: sixteen high-information follow-up runs that rerun the winner, probe nearby blend sensitivity, test validation split seeds `7`, `123`, and `2026`, combine the winning blend with the best baseline/W1-schedule candidates, and enable nested held-out blend evaluation. By default the notebook launches four parallel worker processes through `task2_w1_grid_worker.py`; each worker is pinned to one GPU, uses `REQUESTED_NUM_GPUS=1`, and trains a non-overlapping slice of the configs. New outputs go under `task2_outputs/hybrid_spike_localization_grid/task2_hybrid_gated_topology_N5_DIV40_grid_robust_blend_tuning/`, leaving the retained current/previous/best run folders and the previous `staged_w1_tuning` grid untouched.
+
+Partial robust-grid follow-up results: the run was interrupted before all 16 configs completed, but four configs finished cleanly. Among completed runs, `grid_robust_blend_next_16_pfA8_boost2_pow075_bestblend` was best on both normal blended W1 (`0.35947`) and nested held-out blend W1 (`0.54868`). It also slightly improved raw model W1 (`0.45597` vs `0.45817`). Based on that signal, the active Task2 defaults now use `pattern_frequency_baseline_alpha=8.0`, `pattern_frequency_activity_alpha_boost=2.0`, and `pattern_frequency_activity_alpha_power=0.75`, while retaining the previously best blend settings (`W1_BLEND_MIN_TRIALS=8`, electrode-level blending on, `W1_BLEND_ELECTRODE_MIN_TRUE_MASS=1e-4`). The no-electrode blend probe was not promoted because it degraded normal final W1 to about `0.4004`.
+
