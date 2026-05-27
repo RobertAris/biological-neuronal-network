@@ -5,40 +5,16 @@ import argparse
 import os
 import math
 
-"""
-For TAs:
+"""Dataset conversion utilities for the final-task data layout.
 
-Each year you will have to create these directories with the course master account. 
-To minimize any accidental overwrite and error traps, the global variables enable simple directory finding for the students. 
-We provide them with utility functions for loading and saving. 
+The course data store has two top-level areas:
 
-1. data_sets
-In data_sets you can put any data that is readable by the students, but not writable. 
-This means, students cannot accidentally delete any data in this directory. Do this with:
-chmod -R -c 0750
-for the directory. 
-Currently it is built such that each group has one folder and there is an additional shared folder. 
+1. ``data_sets`` contains read-only source datasets.
+2. ``saves`` contains student prediction files with write access.
 
-2. saves
-Here you collect results, saves from students. Here you have to give also writing access:
-chmod -R -c 0770
-Currently it is built such that each group has one folder in saves, and one in saves/shared/
-
-3. groups.txt
-This contains the assignement for a group to the user ids. The first entry is the group. For example:
-group_id, members
-1, 1, 2
-2, 3, 4
-3, 14, 5
-4, 6, 7
-5, 8, 9
-6, 10, 11
-7, 12, 13
-8, 15, 16
-
-That way, their user account is automatically assigned to the group and no accidental switch up can happen. 
-
-This script creates a dataset with the parameters specified below from a pattern_sweep recording. 
+Each area contains group-specific folders and a shared folder. ``groups.txt`` maps
+student user IDs to group IDs so loading and saving functions can resolve paths
+consistently. This script creates HDF5 datasets from pattern-sweep recordings.
 """
 
 POST_ID_STRING          = "fs"
@@ -60,8 +36,8 @@ def getResponse(spike_times: np.ndarray, starts: np.ndarray, spike_matrix: np.nd
     Based on an array containing the start timings of a response, the spikes are labeled with the corresponding response.
     :param spike_times: A 1d numpy array containing the spike timings (in frameno).
     :param starts: A 1d numpy array containing the trigger times.
-    :param spike_matrix: A 2d numpy array of shape (N, n_spikes) containing addtional information per spike.
-    :param starts_matrix: A 2d numpy array of shape (N, n_spikes) containing addtional information per trigger time.
+    :param spike_matrix: A 2d numpy array of shape (N, n_spikes) containing additional information per spike.
+    :param starts_matrix: A 2d numpy array of shape (N, n_spikes) containing additional information per trigger time.
     :param window: Window, in which a spike has to occur such that it belongs to a specific response start.
     :return: A numpy array of shape (5,n_filtered_spikes), where the first dimension corresponds to
     (channel, additional_info, response) and the used response starts (trigger_time, additional_info).
@@ -142,7 +118,7 @@ def load_data(data_path):
         event_times = h5file["events"]["frameno"]
         event_ids = h5file["events"]["eventid"]
         event_dict = h5file["events"]["eventMessage"]
-        # This one had only different amplitudes, the amplitude was saved in the dictionary under “amp“
+        # Amplitudes are stored in the event metadata under the "amp" key.
         stim_amplitudes = np.array([float(json.loads(m.decode())['amp']) for m in event_dict])
         stim_frequencies = np.array([float(json.loads(m.decode())['freq']) for m in event_dict])
         stim_patterns = np.array([float(json.loads(m.decode())['pattern']) for m in event_dict])
@@ -220,7 +196,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "network",
         type=int,
-        help="What network is being saved"
+        help="Network identifier for the dataset being saved."
     )
     parser.add_argument(
         "day_in_vitro",
@@ -229,7 +205,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--group",
-        type=int,   # or int, or str, whatever you need
+        type=int,
         default=None,
         help="What group the recording belongs to. It is saved in a shared directory if not specified."
     )
@@ -237,7 +213,7 @@ if __name__ == "__main__":
         "--base_path",
         type=str,
         default=".",
-        help="Where the basepath is of the data."
+        help="Base output path for the converted dataset."
     )
     parser.add_argument(
         "--param_only",

@@ -14,7 +14,7 @@ def get_group_id(user_id):
             group_id, *members = [int(x.strip()) for x in row]
             if user_id in members:
                 return group_id
-    raise ValueError(f"No group found for user {user_id}")  # user has no friends
+    raise ValueError(f"No group found for user {user_id}")
 
 def load_data(
     network: int, 
@@ -63,7 +63,7 @@ def save_data(
     post_fix = TEST_NAME_POST_FIX if test_mode else ""
     data_path = os.path.join(BASE_READ_PATH,directory,NAME_CONV(network,day_in_vitro))
     data_path = data_path + post_fix + ".h5"
-    # Checking shapes
+    # Validate output shapes against the reference dataset.
     with h5py.File(data_path, 'r') as h5file:
         if "binned_spike_train_responses" in h5file:
             size = h5file["binned_spike_train_responses"].shape[0]

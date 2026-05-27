@@ -1,2 +1,0 @@
-epoch,train_loss,train_acc,train_acc_percent,val_loss,val_macro_f1,val_macro_f1_percent,val_weighted_f1,val_weighted_f1_percent,val_micro_f1,val_micro_f1_percent,val_acc,val_acc_percent,learning_rate,epochs_without_improvement,is_best_f1_this_run,val_macro_f1_network_6,val_acc_network_6
-1,0.41547561854355997,0.8607277480544747,86.07277480544747,0.15860570581822558,0.9452018404927494,94.52018404927493,0.945197891664467,94.5197891664467,0.9453752894700995,94.53752894700995,0.9453752894700994,94.53752894700995,0.0008,0,True,0.9452018404927494,0.9453752894700994

@@ -1,68 +1,0 @@
-Task 1 output directory: /home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N5_DIV40_macro_f1_seed42_20260525_012941
-Live training log: /home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N5_DIV40_macro_f1_seed42_20260525_012941/live_training.log
-Previous all-time best exact-label Task 1 validation macro-F1: 99.96%
-  0%|          | 0/100 [00:00<?, ?it/s]epoch 1 train_acc=94.6% val_f1=98.7% best_f1=98.7% stale=0:   0%|          | 0/100 [01:00<?, ?it/s]Epoch 001: train_acc=94.55% val_macro_f1=98.71% val_acc=98.71% val_loss=0.0430 best_f1=98.71% stale=0/16
-epoch 1 train_acc=94.6% val_f1=98.7% best_f1=98.7% stale=0:   1%|1         | 1/100 [01:00<1:39:43, 60.44s/it]epoch 2 train_acc=99.7% val_f1=99.5% best_f1=99.5% stale=0:   1%|1         | 1/100 [01:57<1:39:43, 60.44s/it]Epoch 002: train_acc=99.67% val_macro_f1=99.48% val_acc=99.48% val_loss=0.0132 best_f1=99.48% stale=0/16
-epoch 2 train_acc=99.7% val_f1=99.5% best_f1=99.5% stale=0:   2%|2         | 2/100 [01:57<1:35:41, 58.59s/it]epoch 3 train_acc=99.7% val_f1=99.8% best_f1=99.8% stale=0:   2%|2         | 2/100 [02:55<1:35:41, 58.59s/it]Epoch 003: train_acc=99.75% val_macro_f1=99.75% val_acc=99.75% val_loss=0.0079 best_f1=99.75% stale=0/16
-epoch 3 train_acc=99.7% val_f1=99.8% best_f1=99.8% stale=0:   3%|3         | 3/100 [02:55<1:34:07, 58.22s/it]epoch 4 train_acc=99.8% val_f1=99.7% best_f1=99.8% stale=1:   3%|3         | 3/100 [03:53<1:34:07, 58.22s/it]epoch 4 train_acc=99.8% val_f1=99.7% best_f1=99.8% stale=1:   4%|4         | 4/100 [03:53<1:33:05, 58.18s/it]epoch 5 train_acc=99.8% val_f1=99.8% best_f1=99.8% stale=0:   4%|4         | 4/100 [04:52<1:33:05, 58.18s/it]Epoch 005: train_acc=99.83% val_macro_f1=99.83% val_acc=99.83% val_loss=0.0058 best_f1=99.83% stale=0/16
-epoch 5 train_acc=99.8% val_f1=99.8% best_f1=99.8% stale=0:   5%|5         | 5/100 [04:52<1:32:44, 58.58s/it]epoch 6 train_acc=99.8% val_f1=99.8% best_f1=99.8% stale=1:   5%|5         | 5/100 [05:49<1:32:44, 58.58s/it]epoch 6 train_acc=99.8% val_f1=99.8% best_f1=99.8% stale=1:   6%|6         | 6/100 [05:49<1:30:42, 57.90s/it]epoch 7 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=0:   6%|6         | 6/100 [06:46<1:30:42, 57.90s/it]Epoch 007: train_acc=99.88% val_macro_f1=99.87% val_acc=99.87% val_loss=0.0033 best_f1=99.87% stale=0/16
-epoch 7 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=0:   7%|7         | 7/100 [06:46<1:29:30, 57.75s/it]epoch 8 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=0:   7%|7         | 7/100 [07:43<1:29:30, 57.75s/it]Epoch 008: train_acc=99.94% val_macro_f1=99.91% val_acc=99.91% val_loss=0.0031 best_f1=99.91% stale=0/16
-epoch 8 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=0:   8%|8         | 8/100 [07:43<1:27:58, 57.37s/it]epoch 9 train_acc=99.9% val_f1=99.6% best_f1=99.9% stale=1:   8%|8         | 8/100 [08:40<1:27:58, 57.37s/it]epoch 9 train_acc=99.9% val_f1=99.6% best_f1=99.9% stale=1:   9%|9         | 9/100 [08:40<1:27:04, 57.41s/it]epoch 10 train_acc=99.7% val_f1=99.9% best_f1=99.9% stale=2:   9%|9         | 9/100 [09:37<1:27:04, 57.41s/it]Epoch 010: train_acc=99.71% val_macro_f1=99.87% val_acc=99.87% val_loss=0.0048 best_f1=99.91% stale=2/16
-epoch 10 train_acc=99.7% val_f1=99.9% best_f1=99.9% stale=2:  10%|#         | 10/100 [09:37<1:25:44, 57.16s/it]epoch 11 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=3:  10%|#         | 10/100 [10:36<1:25:44, 57.16s/it]epoch 11 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=3:  11%|#1        | 11/100 [10:36<1:25:30, 57.64s/it]epoch 12 train_acc=100.0% val_f1=99.8% best_f1=99.9% stale=4:  11%|#1        | 11/100 [11:33<1:25:30, 57.64s/it]epoch 12 train_acc=100.0% val_f1=99.8% best_f1=99.9% stale=4:  12%|#2        | 12/100 [11:33<1:24:28, 57.60s/it]epoch 13 train_acc=100.0% val_f1=99.9% best_f1=99.9% stale=5:  12%|#2        | 12/100 [12:30<1:24:28, 57.60s/it]epoch 13 train_acc=100.0% val_f1=99.9% best_f1=99.9% stale=5:  13%|#3        | 13/100 [12:30<1:22:59, 57.23s/it]epoch 14 train_acc=99.9% val_f1=99.8% best_f1=99.9% stale=6:  13%|#3        | 13/100 [13:26<1:22:59, 57.23s/it] epoch 14 train_acc=99.9% val_f1=99.8% best_f1=99.9% stale=6:  14%|#4        | 14/100 [13:26<1:21:45, 57.04s/it]epoch 15 train_acc=99.9% val_f1=99.6% best_f1=99.9% stale=7:  14%|#4        | 14/100 [14:24<1:21:45, 57.04s/it]Epoch 015: train_acc=99.86% val_macro_f1=99.58% val_acc=99.58% val_loss=0.0111 best_f1=99.91% stale=7/16
-epoch 15 train_acc=99.9% val_f1=99.6% best_f1=99.9% stale=7:  15%|#5        | 15/100 [14:24<1:20:56, 57.14s/it]epoch 16 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=8:  15%|#5        | 15/100 [15:20<1:20:56, 57.14s/it]epoch 16 train_acc=99.9% val_f1=99.9% best_f1=99.9% stale=8:  16%|#6        | 16/100 [15:20<1:19:44, 56.96s/it]epoch 17 train_acc=100.0% val_f1=99.9% best_f1=99.9% stale=0:  16%|#6        | 16/100 [16:17<1:19:44, 56.96s/it]Epoch 017: train_acc=99.98% val_macro_f1=99.95% val_acc=99.95% val_loss=0.0022 best_f1=99.95% stale=0/16
-epoch 17 train_acc=100.0% val_f1=99.9% best_f1=99.9% stale=0:  17%|#7        | 17/100 [16:17<1:18:39, 56.86s/it]epoch 18 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=0:  17%|#7        | 17/100 [17:14<1:18:39, 56.86s/it]Epoch 018: train_acc=99.99% val_macro_f1=99.96% val_acc=99.96% val_loss=0.0016 best_f1=99.96% stale=0/16
-epoch 18 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=0:  18%|#8        | 18/100 [17:14<1:17:43, 56.87s/it]epoch 19 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=1:  18%|#8        | 18/100 [18:11<1:17:43, 56.87s/it] epoch 19 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=1:  19%|#9        | 19/100 [18:11<1:16:46, 56.87s/it]epoch 20 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=2:  19%|#9        | 19/100 [19:08<1:16:46, 56.87s/it]Epoch 020: train_acc=100.00% val_macro_f1=99.95% val_acc=99.95% val_loss=0.0015 best_f1=99.96% stale=2/16
-epoch 20 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=2:  20%|##        | 20/100 [19:08<1:16:09, 57.12s/it]epoch 21 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=3:  20%|##        | 20/100 [20:05<1:16:09, 57.12s/it]epoch 21 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=3:  21%|##1       | 21/100 [20:05<1:14:59, 56.96s/it]epoch 22 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=4:  21%|##1       | 21/100 [21:01<1:14:59, 56.96s/it]epoch 22 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=4:  22%|##2       | 22/100 [21:01<1:13:51, 56.81s/it]epoch 23 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=5:  22%|##2       | 22/100 [21:58<1:13:51, 56.81s/it]epoch 23 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=5:  23%|##3       | 23/100 [21:58<1:12:46, 56.70s/it]epoch 24 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=0:  23%|##3       | 23/100 [22:54<1:12:46, 56.70s/it]Epoch 024: train_acc=100.00% val_macro_f1=99.97% val_acc=99.97% val_loss=0.0015 best_f1=99.97% stale=0/16
-epoch 24 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=0:  24%|##4       | 24/100 [22:54<1:11:44, 56.64s/it]epoch 25 train_acc=99.9% val_f1=99.8% best_f1=100.0% stale=1:  24%|##4       | 24/100 [23:51<1:11:44, 56.64s/it]  Epoch 025: train_acc=99.92% val_macro_f1=99.79% val_acc=99.79% val_loss=0.0074 best_f1=99.97% stale=1/16
-epoch 25 train_acc=99.9% val_f1=99.8% best_f1=100.0% stale=1:  25%|##5       | 25/100 [23:51<1:10:42, 56.57s/it]epoch 26 train_acc=99.9% val_f1=99.8% best_f1=100.0% stale=2:  25%|##5       | 25/100 [24:47<1:10:42, 56.57s/it]epoch 26 train_acc=99.9% val_f1=99.8% best_f1=100.0% stale=2:  26%|##6       | 26/100 [24:47<1:09:43, 56.53s/it]epoch 27 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=3:  26%|##6       | 26/100 [25:45<1:09:43, 56.53s/it]epoch 27 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=3:  27%|##7       | 27/100 [25:45<1:09:14, 56.91s/it]epoch 28 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=4:  27%|##7       | 27/100 [26:43<1:09:14, 56.91s/it] epoch 28 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=4:  28%|##8       | 28/100 [26:43<1:08:44, 57.28s/it]epoch 29 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=5:  28%|##8       | 28/100 [27:40<1:08:44, 57.28s/it]epoch 29 train_acc=100.0% val_f1=100.0% best_f1=100.0% stale=5:  29%|##9       | 29/100 [27:40<1:07:28, 57.02s/it]epoch 30 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=6:  29%|##9       | 29/100 [28:36<1:07:28, 57.02s/it] Epoch 030: train_acc=99.99% val_macro_f1=99.91% val_acc=99.91% val_loss=0.0031 best_f1=99.97% stale=6/16
-epoch 30 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=6:  30%|###       | 30/100 [28:36<1:06:20, 56.86s/it]epoch 31 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=7:  30%|###       | 30/100 [29:32<1:06:20, 56.86s/it]epoch 31 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=7:  31%|###1      | 31/100 [29:32<1:05:10, 56.68s/it]epoch 32 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=8:  31%|###1      | 31/100 [30:29<1:05:10, 56.68s/it]epoch 32 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=8:  32%|###2      | 32/100 [30:29<1:04:12, 56.66s/it]epoch 33 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=9:  32%|###2      | 32/100 [31:26<1:04:12, 56.66s/it]epoch 33 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=9:  33%|###3      | 33/100 [31:26<1:03:34, 56.93s/it]epoch 34 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=10:  33%|###3      | 33/100 [32:23<1:03:34, 56.93s/it]epoch 34 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=10:  34%|###4      | 34/100 [32:23<1:02:33, 56.87s/it]epoch 35 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=11:  34%|###4      | 34/100 [33:20<1:02:33, 56.87s/it]Epoch 035: train_acc=100.00% val_macro_f1=99.94% val_acc=99.93% val_loss=0.0022 best_f1=99.97% stale=11/16
-epoch 35 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=11:  35%|###5      | 35/100 [33:20<1:01:31, 56.79s/it]epoch 36 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=12:  35%|###5      | 35/100 [34:17<1:01:31, 56.79s/it]epoch 36 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=12:  36%|###6      | 36/100 [34:17<1:00:42, 56.92s/it]epoch 37 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=13:  36%|###6      | 36/100 [35:13<1:00:42, 56.92s/it]epoch 37 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=13:  37%|###7      | 37/100 [35:13<59:34, 56.74s/it]  epoch 38 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=14:  37%|###7      | 37/100 [36:10<59:34, 56.74s/it]epoch 38 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=14:  38%|###8      | 38/100 [36:10<58:34, 56.69s/it]epoch 39 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=15:  38%|###8      | 38/100 [37:08<58:34, 56.69s/it]epoch 39 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=15:  39%|###9      | 39/100 [37:08<58:06, 57.16s/it]epoch 40 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=16:  39%|###9      | 39/100 [38:05<58:06, 57.16s/it]Epoch 040: train_acc=100.00% val_macro_f1=99.92% val_acc=99.92% val_loss=0.0021 best_f1=99.97% stale=16/16
-Early stopping at epoch 40: early_stop_no_val_macro_f1_improvement_16_epochs_min_delta_0.0001
-epoch 40 train_acc=100.0% val_f1=99.9% best_f1=100.0% stale=16:  39%|###9      | 39/100 [38:05<59:34, 58.59s/it]
-Task 1 run summary:
-{
-  "status": "early_stopped",
-  "stop_reason": "early_stop_no_val_macro_f1_improvement_16_epochs_min_delta_0.0001",
-  "model_type": "task1_final_N5_DIV40_macro_f1_v1",
-  "completed_epochs": 40,
-  "primary_metric": "macro_f1",
-  "current_run_best_val_macro_f1": 0.9997415403292736,
-  "current_run_best_val_f1": 0.9997415403292736,
-  "current_run_best_val_weighted_f1": 0.9997393810349257,
-  "current_run_best_val_micro_f1": 0.9997393797237425,
-  "current_run_best_val_acc": 0.9997393797237425,
-  "current_run_best_f1_epoch": 24,
-  "current_run_best_val_loss": 0.0014815463427945966,
-  "all_time_best_val_macro_f1": 0.9997415403292736,
-  "available_networks": [
-    5
-  ],
-  "split_mode": "stratified_random",
-  "random_seed": 42,
-  "val_frac": 0.1,
-  "n_train": 68991,
-  "n_val": 7674,
-  "batch_size": 256,
-  "learning_rate": 0.0008,
-  "weight_decay": 0.0001,
-  "class_label_smoothing": 0.0,
-  "use_frequency_features": false,
-  "raw_time_windows": 8,
-  "model_dropout": 0.14,
-  "uses_pattern_circle_loss": false,
-  "uses_pattern_angle_head": false,
-  "uses_electrode_loop_topology": true,
-  "early_stop_patience": 16,
-  "early_stop_min_delta": 0.0001,
-  "scheduler_patience": 7,
-  "device": "cuda:0",
-  "task1_gpu_ids": [
-    0,
-    1
-  ],
-  "uses_data_parallel": true,
-  "run_name": "task1_N5_DIV40_macro_f1_seed42_20260525_012941",
-  "output_dir": "/home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N5_DIV40_macro_f1_seed42_20260525_012941",
-  "best_model_this_run": "/home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N5_DIV40_macro_f1_seed42_20260525_012941/best_model_this_run.pth",
-  "all_time_best_model_path": "/home/bnn_10fs26/best_model_final_task_1_N5_DIV40_macro_f1.pth"
-}

@@ -56,12 +56,11 @@ def map_colour_to_electrode(
 )-> (Axes):
     """
     Generates a plot of the voltage map, which is binarized into open/covered electrodes with 1/0 respectively.
-    The colours are put ontop of the specified electrodes.
+    The colours are overlaid on the specified electrodes.
     :param axis: Axis of a matplotlib subplot.
     :param impedance_map: The voltage map, where covered electrodes have a value <= 0.
     :param electrodes: Electrodes, for which a blob should be plotted.
-    :param colours: Colour of the respective blob.
-    :return: axis, legend handels
+    :return: Matplotlib axis with the electrode overlay.
     """
     colours = Circular_Angle_Colour_Coding(electrodes)(electrodes)
     normalization = Normalize(impedance_map.min(),impedance_map.max())
