@@ -1,5 +1,5 @@
-Task 1 output directory: /home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957
-Live training log: /home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957/live_training.log
+Task 1 output directory: /home/bnn_10fs26/pands_ibnnwml/Networks/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957
+Live training log: /home/bnn_10fs26/pands_ibnnwml/Networks/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957/live_training.log
 Previous all-time best exact-label Task 1 validation macro-F1: 94.52%
   0%|          | 0/100 [00:00<?, ?it/s]epoch 1 train_acc=86.2% val_f1=95.7% best_f1=95.7% stale=0:   0%|          | 0/100 [01:03<?, ?it/s]Epoch 001: train_acc=86.24% val_macro_f1=95.69% val_acc=95.70% val_loss=0.1289 best_f1=95.69% stale=0/16
 epoch 1 train_acc=86.2% val_f1=95.7% best_f1=95.7% stale=0:   1%|1         | 1/100 [01:03<1:44:50, 63.54s/it]epoch 2 train_acc=97.2% val_f1=97.4% best_f1=97.4% stale=0:   1%|1         | 1/100 [02:05<1:44:50, 63.54s/it]Epoch 002: train_acc=97.22% val_macro_f1=97.44% val_acc=97.44% val_loss=0.0800 best_f1=97.44% stale=0/16
@@ -63,7 +63,7 @@ Task 1 run summary:
   ],
   "uses_data_parallel": true,
   "run_name": "task1_N6_DIV40_macro_f1_seed42_20260525_024957",
-  "output_dir": "/home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957",
-  "best_model_this_run": "/home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957/best_model_this_run.pth",
-  "all_time_best_model_path": "/home/bnn_10fs26/best_model_final_task_1_N6_DIV40_macro_f1.pth"
+  "output_dir": "/home/bnn_10fs26/pands_ibnnwml/Networks/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957",
+  "best_model_this_run": "/home/bnn_10fs26/pands_ibnnwml/Networks/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957/best_model_this_run.pth",
+  "all_time_best_model_path": "/home/bnn_10fs26/best_model_pattern_classification_N6_DIV40_macro_f1.pth"
 }

@@ -40,7 +40,7 @@
   ],
   "uses_data_parallel": true,
   "run_name": "task1_N6_DIV40_macro_f1_seed42_20260525_024957",
-  "output_dir": "/home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957",
-  "best_model_this_run": "/home/bnn_10fs26/pands_ibnnwml/Final_Task/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957/best_model_this_run.pth",
-  "all_time_best_model_path": "/home/bnn_10fs26/best_model_final_task_1_N6_DIV40_macro_f1.pth"
+  "output_dir": "/home/bnn_10fs26/pands_ibnnwml/Networks/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957",
+  "best_model_this_run": "/home/bnn_10fs26/pands_ibnnwml/Networks/task1_outputs/task1_N6_DIV40_macro_f1_seed42_20260525_024957/best_model_this_run.pth",
+  "all_time_best_model_path": "/home/bnn_10fs26/best_model_pattern_classification_N6_DIV40_macro_f1.pth"
 }

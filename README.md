@@ -21,9 +21,9 @@ Task 2 uses a coordinate-aware graph temporal residual decoder with validation-s
 ## Repository Layout
 
 ```text
-Final_Task/
-  Final_Task_1.ipynb          # stimulation-pattern classification
-  Final_Task_2.ipynb          # spike-response prediction
+Networks/
+  Pattern_Classification.ipynb          # stimulation-pattern classification
+  Spike_Response_Prediction.ipynb          # spike-response prediction
   model_iteration_summary.md  # detailed architecture, configuration, and metrics
   task1_outputs/              # committed Task 1 validation summaries
   task2_outputs/README.md     # Task 2 artifact policy and selected metrics
@@ -31,7 +31,7 @@ Final_Task/
 requirements.txt
 ```
 
-Large model checkpoints (`*.pth`) and generated Task 2 output directories are intentionally not tracked. The selected checkpoint paths and metrics are documented in `Final_Task/model_iteration_summary.md`.
+Large model checkpoints (`*.pth`) and generated Task 2 output directories are intentionally not tracked. The selected checkpoint paths and metrics are documented in `Networks/model_iteration_summary.md`.
 
 ## Data
 
@@ -42,7 +42,7 @@ The notebooks expect the shared project HDF5 files:
 - Task 2 training/evaluation: `N5_DIV40.h5`
 - Task 2 final inference: `N5_DIV40_test.h5`
 
-Data access is centralized in `Final_Task/utils/data.py`. The `_test` files are used only for final inference because they omit the supervised target for the corresponding task.
+Data access is centralized in `Networks/utils/data.py`. The `_test` files are used only for final inference because they omit the supervised target for the corresponding task.
 
 ## Setup
 
@@ -52,11 +52,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Open the final notebooks from the repository root or from `Final_Task/`:
+Open the final notebooks from the repository root or from `Networks/`:
 
 ```bash
-jupyter notebook Final_Task/Final_Task_1.ipynb
-jupyter notebook Final_Task/Final_Task_2.ipynb
+jupyter notebook Networks/Pattern_Classification.ipynb
+jupyter notebook Networks/Spike_Response_Prediction.ipynb
 ```
 
-For a fuller record of the selected architectures, splits, checkpoints, and validation diagnostics, see `Final_Task/model_iteration_summary.md`.
+For a fuller record of the selected architectures, splits, checkpoints, and validation diagnostics, see `Networks/model_iteration_summary.md`.

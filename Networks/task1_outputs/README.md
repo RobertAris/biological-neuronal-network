@@ -10,6 +10,6 @@ The primary Task 1 validation/checkpoint metric is macro-F1; exact-label accurac
 
 ## Notebook Configuration
 
-`Final_Task_1.ipynb` targets `NETWORK_CANDIDATES = [6]`, `DIV = 40`, `RANDOM_SEED = 42`, and a stratified random validation split.
+`Pattern_Classification.ipynb` targets `NETWORK_CANDIDATES = [6]`, `DIV = 40`, `RANDOM_SEED = 42`, and a stratified random validation split.
 
 The final inference cell completed successfully and wrote a Task 1 prediction HDF5 with `stimulation_patterns` shape `(9839,)`.

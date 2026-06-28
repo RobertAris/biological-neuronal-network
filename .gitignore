@@ -1,5 +1,5 @@
 
 *.pth
-Final_Task/task2_outputs/*
-!Final_Task/task2_outputs/
-!Final_Task/task2_outputs/README.md
+Networks/task2_outputs/*
+!Networks/task2_outputs/
+!Networks/task2_outputs/README.md

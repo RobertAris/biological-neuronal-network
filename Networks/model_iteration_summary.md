@@ -6,8 +6,8 @@ Updated: 2026-05-27
 
 This repository contains the final notebooks, selected lightweight model outputs, and research notes for the two final tasks:
 
-- `Final_Task_1.ipynb` - Task 1 exact stimulation-pattern classification.
-- `Final_Task_2.ipynb` - Task 2 electrode-by-time spike-response prediction.
+- `Pattern_Classification.ipynb` - Task 1 exact stimulation-pattern classification.
+- `Spike_Response_Prediction.ipynb` - Task 2 electrode-by-time spike-response prediction.
 
 The included output summaries correspond to the selected final validation and inference runs. Large generated Task 2 artifacts and model checkpoints are intentionally left out of git.
 
@@ -49,7 +49,7 @@ Task 2 selected output:
 
 ## Notebook
 
-`Final_Task_1.ipynb`
+`Pattern_Classification.ipynb`
 
 The notebook trains the selected exact-pattern classifier for `N6_DIV40.h5` and writes final `_test` predictions with shape `(9839,)`.
 
@@ -61,7 +61,7 @@ Run:
 
 Checkpoint:
 
-`/home/bnn_10fs26/best_model_final_task_1_N6_DIV40_macro_f1.pth`
+`/home/bnn_10fs26/best_model_pattern_classification_N6_DIV40_macro_f1.pth`
 
 Key validation metrics:
 
@@ -132,7 +132,7 @@ EARLY_STOP_MIN_DELTA = 1e-4
 
 ## Notebook
 
-`Final_Task_2.ipynb`
+`Spike_Response_Prediction.ipynb`
 
 The notebook defines the final Task 2 model family for `N5_DIV40.h5` and performs final `_test` inference from the selected checkpoint:
 
@@ -161,7 +161,7 @@ Key metrics:
 | best epoch | `156` |
 | epochs run | `176` |
 
-This checkpoint is used by `Final_Task_2.ipynb` for final test inference.
+This checkpoint is used by `Spike_Response_Prediction.ipynb` for final test inference.
 
 ## Task 2 Architecture
 

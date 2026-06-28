@@ -17,4 +17,4 @@ Task 2 generated artifacts are intentionally kept out of git because the selecte
 | best epoch | `156` |
 | epochs run | `176` |
 
-The final inference cell in `../Final_Task_2.ipynb` writes `binned_spike_train_responses` with shape `(9839, 105, 80)`.
+The final inference cell in `../Spike_Response_Prediction.ipynb` writes `binned_spike_train_responses` with shape `(9839, 105, 80)`.

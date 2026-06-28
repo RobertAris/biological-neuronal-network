@@ -6,8 +6,8 @@ This directory contains the two final analyses for in vitro neural response mode
 
 | notebook | focus | final data |
 | --- | --- | --- |
-| `Final_Task_1.ipynb` | stimulation-pattern classification | `N6_DIV40` |
-| `Final_Task_2.ipynb` | electrode-by-time spike-response prediction | `N5_DIV40` |
+| `Pattern_Classification.ipynb` | stimulation-pattern classification | `N6_DIV40` |
+| `Spike_Response_Prediction.ipynb` | electrode-by-time spike-response prediction | `N5_DIV40` |
 
 `model_iteration_summary.md` is the compact research log for the final selected configurations, including architecture notes, checkpoints, validation splits, and metrics.
 
