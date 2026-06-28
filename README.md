@@ -1,185 +1,62 @@
-# SLURM Guide P&S
+# In Vitro Neural Response Modeling
 
-## Prerequisites
+This repository contains the final research notebooks for modeling stimulation-response recordings from biological neuronal networks. The work focuses on two complementary prediction problems:
 
-- You need your Snowflake account and password which you received via mail from us.
-- Your account name follows this format: `bnn_[nn]fs26`, where `[nn]` is your assigned number (01-16).
-- Ensure you are within the ETH network or connected via VPN.
-- You must connect to the cluster through an intermediate PC: `tardis-b[mm]`, where `[mm]` matches your `[nn]`.
-- Download the following scripts from Moodle:
-  - `run_job.sh`
-  - `install_conda.sh`
+1. infer the stimulation pattern that produced an observed neural response;
+2. predict the full electrode-by-time spike response from stimulation parameters.
+
+The repository has been reduced to the final experiments, selected lightweight results, and shared utilities needed to inspect or reproduce those two analyses.
+
+## Results
+
+| task | dataset | target | selected metric |
+| --- | --- | --- | ---: |
+| Task 1 | `N6_DIV40` | 16-class stimulation-pattern ID | `98.5313%` validation macro-F1 |
+| Task 2 | `N5_DIV40` | spike-response tensor `(9839, 105, 80)` | `0.3506 ms` blended weighted W1 proxy |
+
+Task 1 uses a hybrid electrode-time and loop-topology classifier. The selected run reached `98.5288%` validation accuracy with `108 / 7341` validation errors; pattern `2` remained the hardest class with `91.2644%` F1.
+
+Task 2 uses a coordinate-aware graph temporal residual decoder with validation-selected blending against pattern and pattern-frequency baselines. The selected blend improved the weighted W1 proxy by `23.3%` over the raw model and `31.8%` over the pattern baseline.
+
+## Repository Layout
+
+```text
+Final_Task/
+  Final_Task_1.ipynb          # stimulation-pattern classification
+  Final_Task_2.ipynb          # spike-response prediction
+  model_iteration_summary.md  # detailed architecture, configuration, and metrics
+  task1_outputs/              # committed Task 1 validation summaries
+  task2_outputs/README.md     # Task 2 artifact policy and selected metrics
+  utils/                      # data loading, saving, and plotting helpers
+requirements.txt
+```
+
+Large model checkpoints (`*.pth`) and generated Task 2 output directories are intentionally not tracked. The selected checkpoint paths and metrics are documented in `Final_Task/model_iteration_summary.md`.
+
+## Data
+
+The notebooks expect the shared project HDF5 files:
+
+- Task 1 training/evaluation: `N6_DIV40.h5`
+- Task 1 final inference: `N6_DIV40_test.h5`
+- Task 2 training/evaluation: `N5_DIV40.h5`
+- Task 2 final inference: `N5_DIV40_test.h5`
+
+Data access is centralized in `Final_Task/utils/data.py`. The `_test` files are used only for final inference because they omit the supervised target for the corresponding task.
 
 ## Setup
 
-1. Open a terminal.
-2. Move the Conda installation script to your Snowflake home folder. The command “scp“ stands for “secure copy protocol“. In a terminal, you can copy/paste using ctrl+shift+c/v on Linux and Windows machines. Note that in a shell, space is used as the delimiter, hence we use ““ to ensure that your path is read as one:
-
-    ```bash
-    scp "/full/path/to/your/script" "bnn_[nn]fs26@tardis-b[mm].ee.ethz.ch:/home/bnn_[nn]fs26/"
-    ```
-
-3. Enter your Snowflake password when prompted.
-4. Connect to the server through “ssh“ (secure shell):
-
-    ```bash
-    ssh bnn_[nn]fs26@tardis-b[mm].ee.ethz.ch
-    ```
-
-5. Make the script executable. “chmod“ stands for “change mode“ and the “+x“ adds the execution rights:
-
-    ```bash
-    chmod +x ./install_conda.sh
-    ```
-
-6. Run the script. The path argument gives the save location where conda will be installed. We use a network scratch drive for this:
-
-    ```bash
-    ./install_conda.sh /usr/itetnas04/data-scratch-01/bnn_[nn]fs26/data
-    ```
-
-7. Set up the Conda alias (adjust the path accordingly, as printed after installation). This will enable you to call the command “conda“ in your terminal:
-
-    ```bash
-    echo '[[ -f /usr/itetnas04/data-scratch-01/bnn_[nn]fs26/data/conda/bin/conda ]] && eval "$(/usr/itetnas04/data-scratch-01/bnn_[nn]fs26/data/conda/bin/conda shell.bash hook)"' >> /home/bnn_[nn]fs26/.bashrc
-    ```
-
-8. Now we link SLURM (Simple Linux Utility for Resource Management) to an alias:
-
-    ```bash
-    echo 'export SLURM_CONF=/home/sladmsnow/slurm/slurm.conf' >> ~/.bashrc
-    ```
-
-9. Enable the alias for both conda and slurm by reloading the bashrc. Afterwards this will no longer be necessary, as with each new login, the bashrc gets activated automatically:
-
-    ```bash
-    source ~/.bashrc
-    ```
-
-10. Create a new Conda environment:
-
-    ```bash
-    conda create --name my_env python=3.10
-    ```
-
-11. Confirm installation by typing `y` when prompted.
-
-12. In order to install now any packages within your environment, we have to make it active: 
-    ```bash
-    conda activate my_env
-    ```
-
-13. Install the machine learning library with conda:
-    ```bash
-    conda install -y pytorch torchvision torchaudio pytorch-cuda=12.4 "mkl<2025.0.0" -c pytorch -c nvidia
-    ```
-
-## Git Setup
-
-1. Fork this repository
-2. Clone your fork:
-
-    ```bash
-    git clone [paste_from_clone_https]
-    ```
-
-3. Navigate to the cloned repository:
-
-    ```bash
-    cd /path/to/the/new/folder
-    ```
-
-4. Activate the Conda environment:
-
-    ```bash
-    conda activate my_env
-    ```
-
-5. Install dependencies:
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-## Usage
-
-You will always have to connect to the intermediate PC:
-
 ```bash
-ssh bnn_[nn]fs26@tardis-b[mm].ee.ethz.ch
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### Submitting Jobs via SLURM
-
-To use the GPU cluster, submit batch jobs. A pre-configured script is available for Jupyter Notebooks. Before submitting:
-
-- Fill in the required fields (log file paths, error output paths, Jupyter Notebook port [5900-5999], and output print paths).
-- Upload the script using the same method as the Conda installation script.
-- Pro-Trick: A Linux shell comes with the command line editor “nano“. You can modify your scripts in your homefolder by using “nano your_script.sh“
-
-### Running SLURM Jobs
-
-Start a job with a 24-hour limit, don't forget to activate your conda environment:
+Open the final notebooks from the repository root or from `Final_Task/`:
 
 ```bash
-sbatch /path/to/the/script/run_job.sh
+jupyter notebook Final_Task/Final_Task_1.ipynb
+jupyter notebook Final_Task/Final_Task_2.ipynb
 ```
 
-Check job status:
-
-```bash
-squeue
-```
-
-As soon as you no longer need the job, cancel it:
-
-```bash
-scancel [job_id]
-```
-
-To access the Jupyter Notebook, check the error output file (e.g., `id.err`):
-
-```bash
-cat [outputfile]
-```
-
-or
-
-```bash
-tail -f [outputfile]
-```
-
-For more details on SLURM scheduling, see [ETH SLURM Guide](https://computing.ee.ethz.ch/Services/SLURM).
-
-### Exercise Submssion Workflow
-
-1. Update your fork on GitLab using the **"Update fork"** button.
-
-2. Pull the latest changes:
-
-   ~~~bash
-   git pull origin master
-   ~~~
-
-3. Complete the notebook `NN/exercise.ipynb`  
-   <!-- Run all cells before committing. Do NOT clear outputs. -->
-
-4. Stage your changes:
-
-   ~~~bash
-   git add NN/exercise.ipynb
-   ~~~
-
-5. Commit:
-
-   ~~~bash
-   git commit -m "Submission for NN"
-   ~~~
-
-6. Push to your fork:
-
-   ~~~bash
-   git push origin master
-   ~~~
-
-7. Send us an email with the link to your repo and which exercise you solved.
+For a fuller record of the selected architectures, splits, checkpoints, and validation diagnostics, see `Final_Task/model_iteration_summary.md`.

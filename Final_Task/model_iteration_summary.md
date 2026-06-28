@@ -4,12 +4,12 @@ Updated: 2026-05-27
 
 ## Scope
 
-This repository contains the final notebooks, selected model outputs, and presentation materials for the two final tasks:
+This repository contains the final notebooks, selected lightweight model outputs, and research notes for the two final tasks:
 
 - `Final_Task_1.ipynb` - Task 1 exact stimulation-pattern classification.
 - `Final_Task_2.ipynb` - Task 2 electrode-by-time spike-response prediction.
 
-The included output directories correspond to the runs used for final submission.
+The included output summaries correspond to the selected final validation and inference runs. Large generated Task 2 artifacts and model checkpoints are intentionally left out of git.
 
 ## Final Data Setup
 
@@ -79,7 +79,7 @@ Key validation metrics:
 
 Pattern `2` was the weakest validation class, with `85.0107%` accuracy and `91.2644%` F1. Most other patterns were at or above approximately `98.7%` accuracy.
 
-The final inference cell completed successfully and wrote the Task 1 submission HDF5 with `stimulation_patterns` shape `(9839,)`.
+The final inference cell completed successfully and wrote the Task 1 prediction HDF5 with `stimulation_patterns` shape `(9839,)`.
 
 ## Task 1 Architecture
 
@@ -138,7 +138,7 @@ The notebook defines the final Task 2 model family for `N5_DIV40.h5` and perform
 
 `task2_outputs/hybrid_spike_localization_grid/task2_hybrid_gated_topology_N5_DIV40_grid_robust_blend_tuning/grid_robust_blend_next_16_best_blend_seed7/best_model_this_variant.pth`
 
-The inference cell applies the validation-selected W1 blend tables when available and writes the Task 2 submission HDF5 with `binned_spike_train_responses` shape `(9839, 105, 80)`.
+The inference cell applies the validation-selected W1 blend tables when available and writes the Task 2 prediction HDF5 with `binned_spike_train_responses` shape `(9839, 105, 80)`.
 
 ## Selected Run
 
